@@ -1,0 +1,23 @@
+@import 'tailwindcss';
+
+/* Tailwind v4: use .dark class on <html> for dark mode instead of OS media query */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@keyframes shelf-drop-success {
+  0% {
+    background-color: #4f46e5;
+    color: #fff;
+  }
+  60% {
+    background-color: #22c55e;
+    color: #fff;
+  }
+  100% {
+    background-color: #4f46e5;
+    color: #fff;
+  }
+}
+
+.shelf-drop-success {
+  animation: shelf-drop-success 0.8s ease-out forwards;
+}
