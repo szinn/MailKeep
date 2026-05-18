@@ -1,0 +1,236 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/core",
+    "crates/database",
+    "crates/utils",
+    "crates/mailkeep",
+    "crates/integration-tests",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+description = "Archive Your IMAP Email"
+readme = "README.md"
+repository = "https://github.com/szinn/MailKeep"
+license = "MIT"
+
+[workspace.dependencies]
+
+# Internal crates
+mk-core = { path = "crates/core" }
+mk-database = { path = "crates/database" }
+mk-frontend = { path = "crates/frontend" }
+mk-utils = { path = "crates/utils" }
+
+# Test support
+mockall = "0.14.0"
+
+# Error handling
+anyhow = "1.0.102"
+thiserror = "2.0.18"
+
+# Crypto
+argon2 = { version = "0.5.3", features = ["std"] }
+rand = "0.10.1"
+
+# Memory management
+mimalloc = "0.1.50"
+
+# Async
+async-trait = "0.1.89"
+tokio = { version = "1.52.3", default-features = false, features = ["full"] }
+tokio-graceful-shutdown = "0.19.3"
+
+# Web
+axum = "0.8.9"
+axum_session = { version = "0.20.1", default-features = false }
+axum_session_auth = { version = "0.20.0", default-features = false }
+dioxus = { version = "0.7.9", features = ["fullstack", "router"] }
+dioxus-server = { version = "0.7.9", features = ["router"] }
+tower = "0.5.3"
+tower-http = { version = "0.6.11", features = [
+    "compression-full",
+    "limit",
+    "request-id",
+    "trace",
+] }
+
+# OpenID Connect
+openidconnect = { version = "4.0.1", default-features = false, features = [
+    "reqwest",
+    "rustls-tls",
+] }
+
+# Config
+config = "0.15.23"
+
+# Utility
+chrono = { version = "0.4.44", features = ["serde"] }
+derive_builder = "0.20.2"
+tempfile = "3.27.0"
+
+# Logging
+log = "0.4.29"
+tracing = { version = "0.1.44", features = ["log"] }
+tracing-log = "0.2.0"
+tracing-subscriber = { version = "0.3.23", features = [
+    "std",
+    "fmt",
+    "registry",
+    "env-filter",
+    "json",
+] }
+
+# Serialization
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+
+# Database
+sea-orm = { version = "2.0.0-rc.38", features = [
+    "debug-print",
+    "postgres-array",
+    "runtime-tokio-rustls",
+    "sqlx-sqlite",
+    "with-chrono",
+    "with-json",
+    "with-rust_decimal",
+    "with-uuid",
+] }
+sea-orm-migration = { version = "2.0.0-rc.38", features = [
+    "sqlx-sqlite",
+    "runtime-tokio-rustls",
+    "with-chrono",
+    "with-json",
+    "with-rust_decimal",
+    "with-uuid",
+] }
+sqlx = "0.8.6"
+
+# CLI
+clap = { version = "4.6.1", features = ["cargo", "derive", "env"] }
+
+# Testing
+insta = { version = "1.47.2", features = ["filters"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+ambiguous_negative_literals = "warn"
+redundant_imports = "warn"
+redundant_lifetimes = "warn"
+trivial_numeric_casts = "warn"
+unused_lifetimes = "warn"
+
+# Opt-outs
+missing_debug_implementations = "allow" # Don't warn about this
+
+[workspace.lints.clippy]
+# Lint categories (priority = -1 allows specific overrides below)
+cargo = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+suspicious = { level = "warn", priority = -1 }
+
+# Previously explicit lints (now covered by categories above, kept for clarity)
+borrow_as_ptr = "warn"
+cast_lossless = "warn"
+explicit_into_iter_loop = "warn"
+explicit_iter_loop = "warn"
+flat_map_option = "warn"
+implicit_clone = "warn"
+needless_for_each = "warn"
+ptr_as_ptr = "warn"
+ptr_cast_constness = "warn"
+ref_as_ptr = "warn"
+semicolon_if_nothing_returned = "warn"
+uninlined_format_args = "warn"
+unnecessary_literal_bound = "warn"
+use_self = "warn"
+useless_conversion = "warn"
+
+# Opt-outs
+redundant_feature_names = "allow" # "test-support" is established convention across all crates
+struct_field_names = "allow"      # test mock naming (_result suffix) is a legitimate convention
+too_many_lines = "allow"          # subjective; doesn't indicate correctness issues
+doc_markdown = "allow"            # overzealous about backtick formatting in docs
+items_after_statements = "allow"  # fires on `use` blocks inside match arms / closures
+map_err_ignore = "allow"          # intentional in server fns that must not leak internal errors
+
+# Restriction lints
+assertions_on_result_states = "warn"
+deref_by_slicing = "warn"
+empty_drop = "warn"
+empty_enum_variants_with_brackets = "warn"
+fn_to_numeric_cast_any = "warn"
+redundant_type_annotations = "warn"
+renamed_function_params = "warn"
+semicolon_outside_block = "warn"
+undocumented_unsafe_blocks = "warn"
+unnecessary_safety_comment = "warn"
+unnecessary_safety_doc = "warn"
+unneeded_field_pattern = "warn"
+unused_result_ok = "warn"
+
+# Opt-outs
+cargo_common_metadata = "allow"                     # App-only crates; readme/keywords/categories not needed
+default_trait_access = "allow"                      # `Default::default()` is fine when type is clear from context
+enum_variant_names = "allow"                        # Route enums intentionally share a common suffix
+literal_string_with_formatting_args = "allow"       # Conflicts with structured logging message templates
+multiple_crate_versions = "allow"                   # Dependency resolution — not always in our control
+suspicious_else_formatting = "allow"                # Dioxus RSX `class: if cond { ... } else { ... }` is idiomatic
+unused_async = "allow"                              # Required for Dioxus endpoints
+unused_trait_names = "allow"
+missing_panics_doc = "allow"
+struct_excessive_bools = "allow"
+must_use_candidate = "allow"
+too_many_arguments = "allow"
+case_sensitive_file_extension_comparisons = "allow"
+allow-attributes-without-reason = "allow"
+empty_structs_with_brackets = "allow"
+
+# Pending Review
+missing_errors_doc = "allow"
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+
+[profile.dev]
+codegen-units = 256
+opt-level = 1
+debug = false
+incremental = true
+
+[profile.dev.package]
+# Insta suggests compiling these packages in opt mode for faster testing.
+# See https://docs.rs/insta/latest/insta/#optional-faster-runs.
+insta.opt-level = 3
+similar.opt-level = 3
+# Proptest suggests compiling itself and its RNG in opt mode as well.
+# See https://proptest-rs.github.io/proptest/proptest/tips-and-best-practices.html#setting-opt-level
+# proptest.opt-level = 3
+# proptest-state-machine.opt-level = 3
+# rand_chacha.opt-level = 3
+
+# Workspace crates: keep at opt-level 1 so incremental dev builds stay fast
+[profile.dev.package.mk-core]
+opt-level = 1
+[profile.dev.package.mk-database]
+opt-level = 1
+[profile.dev.package.mk-frontend]
+opt-level = 1
+[profile.dev.package.mk-utils]
+opt-level = 1
+[profile.dev.package.mailkeep]
+opt-level = 1
+# [profile.dev.package.integration-tests]
+# opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+strip = "debuginfo"
+codegen-units = 1

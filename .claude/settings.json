@@ -1,0 +1,92 @@
+{
+  "permissions": {
+    "additionalDirectories": ["/Users/scotte/Development/Projects/Insights"],
+    "allow": [
+      "Bash(INSTA_UPDATE=always cargo test:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo doc:*)",
+      "Bash(cargo insta:*)",
+      "Bash(cargo metadata:*)",
+      "Bash(cargo nextest:*)",
+      "Bash(cargo run:*)",
+      "Bash(cargo search *)",
+      "Bash(cargo test:*)",
+      "Bash(cargo tree:*)",
+      "Bash(direnv allow:*)",
+      "Bash(curl:*)",
+      "Bash(find:*)",
+      "Bash(gh api:*)",
+      "Bash(grep:*)",
+      "Bash(jj desc:*)",
+      "Bash(jj describe:*)",
+      "Bash(jj diff:*)",
+      "Bash(jj log:*)",
+      "Bash(jj new:*)",
+      "Bash(jj show:*)",
+      "Bash(jj status:*)",
+      "Bash(jj untrack:*)",
+      "Bash(jj:*)",
+      "Bash(just *)",
+      "Bash(ls:*)",
+      "Bash(mise trust:*)",
+      "Bash(sed -n '*,*p' *)",
+      "Bash(/Users/scotte/.claude/plugins/cache/superpowers-extended-cc-marketplace/superpowers-extended-cc/5.2.1/skills/brainstorming/scripts/start-server.sh --project-dir /Users/scotte/Development/Projects/MailKeep)",
+      "Bash(~/.claude/plugins/cache/superpowers-extended-cc-marketplace/superpowers-extended-cc/5.2.1/skills/brainstorming/scripts/start-server.sh --project-dir /Users/scotte/Development/Projects/MailKeep)",
+      "Bash(bash /Users/scotte/.claude/plugins/cache/superpowers-extended-cc-marketplace/superpowers-extended-cc/5.2.1/skills/brainstorming/scripts/start-server.sh --project-dir /Users/scotte/Development/Projects/MailKeep)",
+      "Bash(bash skills/brainstorming/scripts/start-server.sh --project-dir /Users/scotte/Development/Projects/MailKeep)",
+      "Edit(./**)",
+      "Read(//Users/scotte/.claude/plugins/marketplaces/superpowers-extended-cc-marketplace/**)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:crates.io)",
+      "WebFetch(domain:dioxuslabs.com)",
+      "WebFetch(domain:docs.hardcover.app)",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:en.wikipedia.org)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:lib.rs)",
+      "WebFetch(domain:ptbrowne.github.io)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:stkclient.readthedocs.io)",
+      "WebFetch(domain:wellbeing.io)",
+      "WebFetch(domain:wiki.mobileread.com)",
+      "WebFetch(domain:www.amazon.com)",
+      "WebFetch(domain:www.edrlab.org)",
+      "WebFetch(domain:www.loc.gov)",
+      "WebFetch(domain:www.mobileread.com)",
+      "WebFetch(domain:www.w3.org)",
+      "WebFetch(domain:zensical.org)",
+      "WebSearch",
+      "mcp__github__get_file_contents",
+      "mcp__github__issue_read",
+      "mcp__github__issue_write",
+      "mcp__issueboss__add_artifact",
+      "mcp__issueboss__add_relationship",
+      "mcp__issueboss__create_issue",
+      "mcp__issueboss__list_artifacts",
+      "mcp__issueboss__list_issues",
+      "mcp__issueboss__list_relationships",
+      "mcp__issueboss__move_artifact",
+      "mcp__issueboss__remove_artifact",
+      "mcp__issueboss__transition_issue",
+      "mcp__issueboss__update_artifact",
+      "mcp__issueboss__update_issue"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": ["github", "issueboss", "mermaid"],
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -Rs '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":(\"# jj Skill\\n\\n\" + .)}}' ~/.claude/skills/jj/SKILL.md 2>/dev/null || true",
+            "statusMessage": "Loading jj skill..."
+          }
+        ]
+      }
+    ]
+  }
+}
