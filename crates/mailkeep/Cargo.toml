@@ -1,0 +1,66 @@
+[package]
+name = "mailkeep"
+description = "Archive Your IMAP Email"
+default-run = "mailkeep"
+autotests = false
+
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+[lib]
+name = "mailkeep"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mailkeep"
+path = "src/bin/mailkeep.rs"
+
+[features]
+server = [
+    "dioxus/server",
+    "dep:anyhow",
+    "dep:async-trait",
+    "dep:clap",
+    "dep:config",
+    "dep:log",
+    "dep:mimalloc",
+    "dep:mk-core",
+    "dep:mk-database",
+    "dep:serde",
+    "dep:thiserror",
+    "dep:tokio",
+    "dep:tokio-graceful-shutdown",
+    "dep:tracing",
+    "dep:tracing-log",
+    "dep:tracing-subscriber",
+]
+web = ["dioxus/web", "dep:mk-frontend", "mk-frontend?/web"]
+
+[dependencies]
+async-trait = { workspace = true, optional = true }
+mk-core = { workspace = true, optional = true }
+mk-database = { workspace = true, optional = true }
+mk-frontend = { workspace = true, optional = true }
+
+anyhow = { workspace = true, optional = true }
+mimalloc = { workspace = true, optional = true }
+clap = { workspace = true, optional = true }
+config = { workspace = true, optional = true }
+dioxus = { workspace = true, optional = true }
+log = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+tokio-graceful-shutdown = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+tracing-log = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true }
+
+[dev-dependencies]
+insta.workspace = true
+
+[lints]
+workspace = true
