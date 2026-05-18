@@ -1,0 +1,6 @@
+.direnv
+.private
+.venv
+.vscode
+*.sops.*
+../crates/frontend/assets/tailwind.css
