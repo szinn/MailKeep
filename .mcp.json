@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${CLAUDE_GITHUB_PAT}"
+      }
+    },
+    "mermaid": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@probelabs/maid-mcp"],
+      "env": {}
+    },
+    "issueboss": {
+      "type": "http",
+      "url": "${ISSUEBOSS_GRPC_HOST}:${ISSUEBOSS_MCP_PORT}/mcp",
+      "headers": {
+        "Authorization": "Bearer ${ISSUEBOSS_API_KEY}"
+      }
+    }
+  }
+}

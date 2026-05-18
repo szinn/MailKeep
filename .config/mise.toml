@@ -1,0 +1,17 @@
+[tools]
+"buf" = "1.69.0"
+"cargo:cargo-audit" = "0.22.1"
+"cargo:cargo-deny" = "0.19.0"
+"cargo:cargo-insta" = "1.43.1"
+"cargo:cargo-nextest" = "0.9.126"
+"cargo:dioxus-cli" = "0.7.9"
+"cargo:mdbook" = "0.5.2"
+"colima" = "0.10.1"
+"git-cliff" = "2.13.1"
+"npm:tailwindcss" = "4.3.0"
+"prettier" = "3.8.3"
+"protobuf" = "34.1"
+"tailwindcss" = "4.2.1"
+
+[tool_alias]
+tailwindcss = "github:tailwindlabs/tailwindcss"
