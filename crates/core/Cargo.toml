@@ -1,0 +1,32 @@
+[package]
+name = "mk-core"
+description = "MailKeep core services"
+autotests = false
+
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+[features]
+test-support = ["dep:mockall"]
+
+[dependencies]
+mockall = { workspace = true, optional = true }
+mk-utils.workspace = true
+
+argon2.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+tokio.workspace = true
+derive_builder.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+mockall = { workspace = true }
+tokio = { workspace = true }
+
+[lints]
+workspace = true
