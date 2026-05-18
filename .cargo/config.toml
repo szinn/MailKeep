@@ -1,0 +1,19 @@
+[build]
+jobs = 8
+# dx 0.7 sets RUSTC=dx to intercept compilation for hot-reload, which
+# conflicts with sccache (sccache probes the compiler with -E, which dx
+# doesn't support). Disable sccache for this project.
+rustc-wrapper = ""
+
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-Clink-arg=-fuse-ld=mold"]
+
+[target.aarch64-unknown-linux-gnu]
+rustflags = ["-Clink-arg=-fuse-ld=mold"]
+
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
+# NOTE: on Windows, build with the static CRT, so that produced .exe files don't
+# depend on vcruntime140.dll; otherwise the user requires visual studio if they
+# download a raw .exe
+rustflags = ["-Ctarget-feature=+crt-static"]

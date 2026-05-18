@@ -1,0 +1,43 @@
+[package]
+name = "mk-core"
+description = "MailKeep core services"
+autotests = false
+
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+[features]
+test-support = ["dep:mockall"]
+
+[dependencies]
+mockall = { workspace = true, optional = true }
+mk-utils.workspace = true
+
+# aes-gcm.workspace = true
+# md-5.workspace = true
+# argon2.workspace = true
+# base64.workspace = true
+# rand.workspace = true
+# sha2.workspace = true
+# async-trait.workspace = true
+# chrono.workspace = true
+# tokio.workspace = true
+# derive_builder.workspace = true
+# rust_decimal.workspace = true
+# serde.workspace = true
+# serde_json.workspace = true
+# tempfile.workspace = true
+tokio-graceful-shutdown.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+mockall = { workspace = true }
+# rust_decimal_macros = { workspace = true }
+# tokio = { workspace = true }
+
+[lints]
+workspace = true
