@@ -107,7 +107,7 @@ sea-orm-migration = { version = "2.0.0-rc.38", features = [
     "with-rust_decimal",
     "with-uuid",
 ] }
-sqlx = "0.8.6"
+sqlx = "0.9.0"
 
 # CLI
 clap = { version = "4.6.1", features = ["cargo", "derive", "env"] }
