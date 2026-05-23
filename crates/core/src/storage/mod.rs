@@ -6,6 +6,6 @@
 //! is structural to the trait contract. Implementations live in adapter
 //! crates (`mk-storage` for the filesystem variant in M1).
 
-mod traits;
+mod service;
 
-pub use traits::{AttachmentStorageService, RawStorageService};
+pub use service::{AttachmentStorageService, RawStorageService};
