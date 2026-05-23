@@ -3655,6 +3655,7 @@ dependencies = [
  "mk-core",
  "mk-database",
  "mk-frontend",
+ "mk-storage",
  "serde",
  "thiserror 2.0.18",
  "tokio",
