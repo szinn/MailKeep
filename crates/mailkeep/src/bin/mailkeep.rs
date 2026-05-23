@@ -42,8 +42,7 @@ async fn cmd_server(config: mailkeep::config::Config) -> anyhow::Result<()> {
     use mk_core::{ExternalServicesBuilder, create_services};
     use mk_database::{create_repository_service, open_database};
     use mk_frontend::server::create_frontend_subsystem;
-    use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder};
-    use tokio_graceful_shutdown::{SubsystemHandle, Toplevel};
+    use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, SubsystemHandle, Toplevel};
 
     tracing::info!("MailKeep {}", clap::crate_version!());
 

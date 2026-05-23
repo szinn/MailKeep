@@ -19,10 +19,11 @@ mk-utils.workspace = true
 argon2.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
-tokio.workspace = true
 derive_builder.workspace = true
 serde.workspace = true
+sha2.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 mockall = { workspace = true }

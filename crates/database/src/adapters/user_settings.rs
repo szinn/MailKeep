@@ -1,9 +1,9 @@
+use chrono::Utc;
 use mk_core::{
     Error, RepositoryError,
     repository::Transaction,
     user::{NewUserSetting, UserId, UserSetting, UserSettingRepository},
 };
-use chrono::Utc;
 use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, sea_query::OnConflict};
 
 use crate::{

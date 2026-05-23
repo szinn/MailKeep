@@ -4,9 +4,9 @@ use argon2::{
     Argon2,
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
-use mk_utils::{define_token_prefix, token::Token};
 use chrono::{DateTime, Utc};
 use derive_builder::Builder;
+use mk_utils::{define_token_prefix, token::Token};
 
 use crate::{
     Error,

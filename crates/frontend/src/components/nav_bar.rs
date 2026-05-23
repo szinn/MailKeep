@@ -1,7 +1,7 @@
-#[cfg(feature = "server")]
-use crate::server::AuthSession;
 use dioxus::prelude::*;
 
+#[cfg(feature = "server")]
+use crate::server::AuthSession;
 use crate::{
     Route,
     components::{THEME_MODE, set_theme_preference},

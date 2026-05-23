@@ -98,8 +98,8 @@ Components are the building blocks of apps
 - Component are functions annotated with the `#[component]` macro.
 - The function name must start with a capital letter or contain an underscore.
 - A component re-renders only under two conditions:
-    1. Its props change (as determined by `PartialEq`).
-    2. An internal reactive state it depends on is updated.
+  1. Its props change (as determined by `PartialEq`).
+  2. An internal reactive state it depends on is updated.
 
 ```rust
 #[component]
@@ -294,23 +294,23 @@ The initial UI rendered by the component on the client must be identical to the 
 - Use `#[get]` / `#[post]` / `#[put]` macros (not `#[server]`) for server functions
 - Axum extensions are declared in the **macro attribute**, NOT in the function signature:
 
-    ```rust
-    #[get("/api/v1/foo", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
-    ```
+  ```rust
+  #[get("/api/v1/foo", auth_session: axum::Extension<AuthSession>, core_services: axum::Extension<Arc<CoreServices>>)]
+  ```
 
 - Function parameters (request args) are declared normally on the function itself
 - Server-side imports are gated:
 
-    ```rust
-    #[cfg(feature = "server")] use {crate::server::AuthSession, bb_core::CoreServices, std::sync::Arc};
-    ```
+  ```rust
+  #[cfg(feature = "server")] use {crate::server::AuthSession, bb_core::CoreServices, std::sync::Arc};
+  ```
 
 - Add tracing stacked above the method macro:
 
-    ```rust
-    #[tracing::instrument(level = "trace", skip(core_services, auth_session))]
-    #[get("/api/v1/foo", ...)]
-    ```
+  ```rust
+  #[tracing::instrument(level = "trace", skip(core_services, auth_session))]
+  #[get("/api/v1/foo", ...)]
+  ```
 
 - `use_server_future(fn)?` returns `Resource<Result<T, E>>` after `?` unwraps the outer `RenderError`
 - Without `?`, returns `Result<Resource<Result<T, E>>, RenderError>` — extract value with `match result { Ok(r) => r().and_then(...), Err(_) => None }`
