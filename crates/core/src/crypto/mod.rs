@@ -9,5 +9,4 @@ mod master_key;
 mod service;
 
 pub use cipher::Ciphertext;
-pub use master_key::MasterKey;
 pub use service::{CipherService, create_cipher_service};

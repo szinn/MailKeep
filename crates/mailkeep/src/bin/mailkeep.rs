@@ -52,8 +52,7 @@ async fn cmd_server(config: mailkeep::config::Config) -> anyhow::Result<()> {
     let database = open_database(&database_path).await.context("Couldn't create database connection")?;
     let repository_service = create_repository_service(database).await.context("Couldn't create database connection")?;
 
-    let master_key = mk_core::crypto::MasterKey::derive(&config.encryption_secret);
-    let cipher_service = mk_core::crypto::create_cipher_service(&master_key);
+    let cipher_service = mk_core::crypto::create_cipher_service(&config.encryption_secret);
     let storage = mk_storage::create_filesystem_storage(&config.storage_path, cipher_service.clone())
         .await
         .context("Couldn't initialize storage")?;

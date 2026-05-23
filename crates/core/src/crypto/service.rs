@@ -5,11 +5,8 @@ use chacha20poly1305::{
     aead::{Aead, AeadCore, KeyInit, OsRng, Payload},
 };
 
-use crate::{
-    Error,
-    account::AccountId,
-    crypto::{Ciphertext, MasterKey},
-};
+use super::master_key::MasterKey;
+use crate::{Error, account::AccountId, crypto::Ciphertext};
 
 /// Symmetric AEAD service.
 ///
@@ -70,9 +67,15 @@ impl CipherService for ChaChaCipherService {
     }
 }
 
+/// Build a `CipherService` from the configured secret string.
+///
+/// Internally derives the 32-byte HKDF master key and feeds it to the
+/// ChaCha20-Poly1305 cipher. The key never escapes this module — callers
+/// only hold the returned `Arc<dyn CipherService>`.
 #[must_use]
-pub fn create_cipher_service(master: &MasterKey) -> Arc<dyn CipherService> {
-    Arc::new(ChaChaCipherService::new(master))
+pub fn create_cipher_service(secret: &str) -> Arc<dyn CipherService> {
+    let master = MasterKey::derive(secret);
+    Arc::new(ChaChaCipherService::new(&master))
 }
 
 #[cfg(test)]
@@ -80,13 +83,10 @@ mod tests {
     use std::sync::Arc;
 
     use super::{CipherService, create_cipher_service};
-    use crate::{
-        Error,
-        crypto::{Ciphertext, MasterKey},
-    };
+    use crate::{Error, crypto::Ciphertext};
 
     fn service() -> Arc<dyn CipherService> {
-        create_cipher_service(&MasterKey::derive("test-secret"))
+        create_cipher_service("test-secret")
     }
 
     const ACCOUNT_A: u64 = 100;

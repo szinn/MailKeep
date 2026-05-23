@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use crate::{
     Error, ExternalServicesBuilder,
     account::AccountId,
-    crypto::{CipherService, MasterKey, create_cipher_service},
+    crypto::{CipherService, create_cipher_service},
     storage::{AttachmentStorageService, RawStorageService},
     types::ContentHash,
 };
@@ -59,7 +59,7 @@ impl AttachmentStorageService for NopAttachmentStorage {
 /// Returns a `CipherService` backed by a fixed test key. Suitable for any
 /// test that exercises crypto without needing a real secret.
 pub fn test_cipher_service() -> Arc<dyn CipherService> {
-    create_cipher_service(&MasterKey::derive("test-support-secret"))
+    create_cipher_service("test-support-secret")
 }
 
 /// Returns an `ExternalServicesBuilder` pre-populated with nop implementations

@@ -7,16 +7,11 @@ const HKDF_INFO: &[u8] = b"mailkeep:master:v1";
 /// 32-byte master key derived from `MAILKEEP__ENCRYPTION_SECRET` via
 /// HKDF-SHA256.
 ///
-/// Wrapped in `SecretBox` so the bytes are zeroized on drop. `MasterKey`
-/// deliberately does not implement `Debug`, so attempting to print it is a
-/// compile error:
-///
-/// ```compile_fail
-/// use mk_core::crypto::MasterKey;
-/// let key = MasterKey::derive("test");
-/// println!("{key:?}");
-/// ```
-pub struct MasterKey(SecretBox<[u8; 32]>);
+/// Crate-private — only `create_cipher_service` constructs one, and it
+/// never leaks past the cipher service it builds. Wrapped in `SecretBox`
+/// so the bytes are zeroized on drop; no `Debug` impl so the key cannot
+/// be accidentally printed.
+pub(crate) struct MasterKey(SecretBox<[u8; 32]>);
 
 impl MasterKey {
     /// Derive a 32-byte key from the user-supplied secret.
@@ -24,8 +19,7 @@ impl MasterKey {
     /// Uses HKDF-SHA256 with no salt and info = `b"mailkeep:master:v1"`. The
     /// secret is expected to be high-entropy (e.g. `openssl rand -hex 32`).
     /// Infallible — 32 bytes is well under HKDF's 255 × HashLen limit.
-    #[must_use]
-    pub fn derive(secret: &str) -> Self {
+    pub(crate) fn derive(secret: &str) -> Self {
         let hk = Hkdf::<Sha256>::new(None, secret.as_bytes());
         let mut key = [0u8; 32];
         hk.expand(HKDF_INFO, &mut key).expect("HKDF expand for 32 bytes never fails");

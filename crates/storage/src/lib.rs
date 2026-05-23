@@ -75,14 +75,13 @@ async fn probe_writable(dir: &Path) -> Result<(), StorageInitError> {
 
 #[cfg(test)]
 mod tests {
-    use mk_core::crypto::{MasterKey, create_cipher_service};
+    use mk_core::crypto::create_cipher_service;
     use tempfile::TempDir;
 
     use super::*;
 
     fn cipher() -> Arc<dyn CipherService> {
-        let key = MasterKey::derive("test-secret");
-        create_cipher_service(&key)
+        create_cipher_service("test-secret")
     }
 
     #[tokio::test]

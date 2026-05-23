@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use mk_core::{
     Error,
-    crypto::{CipherService, MasterKey, create_cipher_service},
+    crypto::{CipherService, create_cipher_service},
     types::ContentHash,
 };
 use mk_storage::create_filesystem_storage;
@@ -13,8 +13,7 @@ const ACCOUNT_A: u64 = 100;
 const ACCOUNT_B: u64 = 200;
 
 fn cipher() -> Arc<dyn CipherService> {
-    let key = MasterKey::derive("integration-test-secret");
-    create_cipher_service(&key)
+    create_cipher_service("integration-test-secret")
 }
 
 #[tokio::test]
