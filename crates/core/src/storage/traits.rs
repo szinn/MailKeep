@@ -1,0 +1,62 @@
+use async_trait::async_trait;
+
+use crate::{Error, account::AccountId, types::ContentHash};
+
+/// Storage service for raw .eml message bytes.
+///
+/// Plaintext in, plaintext out — implementations encrypt internally with
+/// per-account AAD binding. Content-addressed: `put_if_absent` returns the
+/// `ContentHash` of the plaintext, and same-plaintext + same-account is a
+/// no-op.
+#[async_trait]
+pub trait RawStorageService: Send + Sync {
+    /// Store the plaintext if not already present. Returns the `ContentHash`
+    /// either way (existing or freshly written).
+    async fn put_if_absent(&self, account_id: AccountId, plaintext: &[u8]) -> Result<ContentHash, Error>;
+
+    /// Retrieve and decrypt a stored blob.
+    ///
+    /// Returns `Err(Error::BlobNotFound { .. })` if no blob with this hash
+    /// is stored for `account_id`. Returns `Err(Error::DecryptionFailed)`
+    /// if the stored ciphertext is tampered or bound to a different account.
+    async fn get(&self, account_id: AccountId, key: &ContentHash) -> Result<Vec<u8>, Error>;
+
+    /// Reports whether a blob is stored. Does not read or decrypt.
+    async fn exists(&self, account_id: AccountId, key: &ContentHash) -> Result<bool, Error>;
+
+    /// Remove all blobs for the given account. Best-effort; partial deletes
+    /// are cryptographically harmless without the master secret.
+    async fn delete_account(&self, account_id: AccountId) -> Result<(), Error>;
+}
+
+/// Storage service for extracted attachment bytes.
+///
+/// Identical shape to `RawStorageService`; kept as a distinct trait so the
+/// two services can diverge later (content-type metadata, thumbnails) and
+/// to enforce the design's separation between the message archive and the
+/// attachment archive.
+#[async_trait]
+pub trait AttachmentStorageService: Send + Sync {
+    async fn put_if_absent(&self, account_id: AccountId, plaintext: &[u8]) -> Result<ContentHash, Error>;
+
+    async fn get(&self, account_id: AccountId, key: &ContentHash) -> Result<Vec<u8>, Error>;
+
+    async fn exists(&self, account_id: AccountId, key: &ContentHash) -> Result<bool, Error>;
+
+    async fn delete_account(&self, account_id: AccountId) -> Result<(), Error>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ErrorKind;
+
+    #[test]
+    fn blob_not_found_kind_is_not_found() {
+        let err = Error::BlobNotFound {
+            account_id: 42,
+            hash: "abc".into(),
+        };
+        assert_eq!(err.kind(), ErrorKind::NotFound);
+    }
+}

@@ -39,6 +39,10 @@ pub enum Error {
     #[error("Storage unavailable: {0}")]
     StorageUnavailable(String),
 
+    /// Encrypted blob not present in the store.
+    #[error("Blob not found for account {account_id}")]
+    BlobNotFound { account_id: u64, hash: String },
+
     #[error("Frontend error: {0}")]
     FrontendError(String),
 
@@ -67,6 +71,7 @@ impl Error {
             Self::Validation(_) => ErrorKind::InvalidInput,
             Self::InvalidTransactionType | Self::Infrastructure(_) | Self::CryptoError(_) | Self::DecryptionFailed => ErrorKind::Internal,
             Self::StorageUnavailable(_) => ErrorKind::ServiceUnavailable,
+            Self::BlobNotFound { .. } => ErrorKind::NotFound,
             Self::RepositoryError(e) => e.kind(),
             Self::FrontendError(_) => ErrorKind::Internal,
             #[cfg(any(test, feature = "test-support"))]
