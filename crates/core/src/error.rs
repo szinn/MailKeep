@@ -45,6 +45,11 @@ pub enum Error {
     #[error("Crypto error: {0}")]
     CryptoError(String),
 
+    /// AEAD decryption failed (AAD mismatch, tag mismatch, or tamper).
+    /// Uniform — distinguishing causes would leak oracle information.
+    #[error("Decryption failed")]
+    DecryptionFailed,
+
     #[error(transparent)]
     RepositoryError(#[from] RepositoryError),
 
@@ -60,7 +65,7 @@ impl Error {
         match self {
             Self::InvalidId(_) | Self::InvalidPageSize(_) | Self::InvalidToken(_) => ErrorKind::BadRequest,
             Self::Validation(_) => ErrorKind::InvalidInput,
-            Self::InvalidTransactionType | Self::Infrastructure(_) | Self::CryptoError(_) => ErrorKind::Internal,
+            Self::InvalidTransactionType | Self::Infrastructure(_) | Self::CryptoError(_) | Self::DecryptionFailed => ErrorKind::Internal,
             Self::StorageUnavailable(_) => ErrorKind::ServiceUnavailable,
             Self::RepositoryError(e) => e.kind(),
             Self::FrontendError(_) => ErrorKind::Internal,

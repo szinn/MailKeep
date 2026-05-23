@@ -34,7 +34,10 @@ thiserror = "2.0.18"
 
 # Crypto
 argon2 = { version = "0.5.3", features = ["std"] }
+chacha20poly1305 = "0.10.1"
+hkdf = "0.12.4"
 rand = "0.10.1"
+secrecy = "0.10.3"
 sha2 = "0.10.9"
 
 # Memory management
