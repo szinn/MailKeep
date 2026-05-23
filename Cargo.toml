@@ -37,7 +37,7 @@ argon2 = { version = "0.5.3", features = ["std"] }
 rand = "0.10.1"
 
 # Memory management
-mimalloc = "0.1.50"
+mimalloc = "0.1.52"
 
 # Async
 async-trait = "0.1.89"
