@@ -3896,6 +3896,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "mk-storage"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "mk-core",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
 name = "mk-utils"
 version = "0.1.0"
 dependencies = [

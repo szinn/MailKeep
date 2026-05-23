@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/core",
     "crates/database",
+    "crates/storage",
     "crates/utils",
     "crates/mailkeep",
     "crates/integration-tests",
@@ -23,6 +24,7 @@ license = "MIT"
 mk-core = { path = "crates/core" }
 mk-database = { path = "crates/database" }
 mk-frontend = { path = "crates/frontend" }
+mk-storage = { path = "crates/storage" }
 mk-utils = { path = "crates/utils" }
 
 # Test support
@@ -224,6 +226,8 @@ opt-level = 1
 [profile.dev.package.mk-database]
 opt-level = 1
 [profile.dev.package.mk-frontend]
+opt-level = 1
+[profile.dev.package.mk-storage]
 opt-level = 1
 [profile.dev.package.mk-utils]
 opt-level = 1
