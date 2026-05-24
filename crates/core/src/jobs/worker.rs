@@ -33,91 +33,98 @@ impl IntoSubsystem<Error> for JobWorker {
         let job_service = self.job_service;
         let poll_interval = self.poll_interval;
 
-        let mut counter: u32 = 0;
         loop {
-            tokio::select! {
-                () = subsys.on_shutdown_requested() => {
-                    tracing::info!("JobWorker shutting down...");
-                    break;
+            // Top-of-loop shutdown check — covers the case where shutdown
+            // fires while no work is happening (between claim attempts).
+            if subsys.is_shutdown_requested() {
+                tracing::info!("JobWorker shutting down...");
+                break;
+            }
+
+            // Try to claim a job.
+            let claimed = {
+                let job_repo = job_repo.clone();
+                match transaction(&*repository, |tx| Box::pin(async move { job_repo.claim_next(tx).await })).await {
+                    Ok(j) => j,
+                    Err(e) if e.is_transient() => {
+                        tracing::warn!("DB unavailable in worker (claim_next), pausing 10s: {e}");
+                        tokio::select! {
+                            () = subsys.on_shutdown_requested() => {
+                                tracing::info!("JobWorker shutting down...");
+                                break;
+                            }
+                            () = tokio::time::sleep(Duration::from_secs(10)) => {}
+                        }
+                        continue;
+                    }
+                    Err(e) => return Err(e),
                 }
-                () = async {} => {
-                    let mut job_processed = false;
-                    if counter == 0 {
-                        let job = {
-                            let job_repo = job_repo.clone();
-                            match transaction(&*repository, |tx| {
-                                Box::pin(async move { job_repo.claim_next(tx).await })
-                            })
-                            .await
-                            {
-                                Ok(j) => j,
-                                Err(e) if e.is_transient() => {
-                                    tracing::warn!("DB unavailable in worker (claim_next), pausing 10s: {e}");
-                                    tokio::time::sleep(Duration::from_secs(10)).await;
-                                    continue;
-                                }
-                                Err(e) => return Err(e),
-                            }
-                        };
+            };
 
-                        if let Some(job) = job {
-                            job_processed = true;
-                            let job_type = job.job_type.clone();
-                            let payload = job.payload.clone();
+            let Some(job) = claimed else {
+                // No work right now — wait for poll_interval or shutdown.
+                tokio::select! {
+                    () = subsys.on_shutdown_requested() => {
+                        tracing::info!("JobWorker shutting down...");
+                        break;
+                    }
+                    () = tokio::time::sleep(poll_interval) => {}
+                }
+                continue;
+            };
 
-                            match job_service.dispatch(&job_type, payload).await {
-                                Ok(()) => {
-                                    let job_repo = job_repo.clone();
-                                    match transaction(&*repository, |tx| {
-                                        let job = job.clone();
-                                        Box::pin(async move { job_repo.complete(tx, job).await })
-                                    })
-                                    .await
-                                    {
-                                        Ok(_) => {}
-                                        Err(e) if e.is_transient() => {
-                                            tracing::warn!("DB unavailable in worker (complete), pausing 10s: {e}");
-                                            tokio::time::sleep(Duration::from_secs(10)).await;
-                                            continue;
-                                        }
-                                        Err(e) => return Err(e),
-                                    }
+            // Dispatch the job's handler, then commit success/failure.
+            let job_type = job.job_type.clone();
+            let payload = job.payload.clone();
+
+            match job_service.dispatch(&job_type, payload).await {
+                Ok(()) => {
+                    let job_repo = job_repo.clone();
+                    match transaction(&*repository, |tx| {
+                        let job = job.clone();
+                        Box::pin(async move { job_repo.complete(tx, job).await })
+                    })
+                    .await
+                    {
+                        Ok(_) => {}
+                        Err(e) if e.is_transient() => {
+                            tracing::warn!("DB unavailable in worker (complete), pausing 10s: {e}");
+                            tokio::select! {
+                                () = subsys.on_shutdown_requested() => {
+                                    tracing::info!("JobWorker shutting down...");
+                                    break;
                                 }
-                                Err(e) => {
-                                    tracing::error!(job_type, error = %e, "job handler failed");
-                                    let job_repo = job_repo.clone();
-                                    match transaction(&*repository, |tx| {
-                                        let job = job.clone();
-                                        Box::pin(async move {
-                                            job_repo.fail(tx, job, e.to_string()).await
-                                        })
-                                    })
-                                    .await
-                                    {
-                                        Ok(_) => {}
-                                        Err(e) if e.is_transient() => {
-                                            tracing::warn!("DB unavailable in worker (fail), pausing 10s: {e}");
-                                            tokio::time::sleep(Duration::from_secs(10)).await;
-                                            continue;
-                                        }
-                                        Err(e) => return Err(e),
-                                    }
-                                }
+                                () = tokio::time::sleep(Duration::from_secs(10)) => {}
                             }
                         }
+                        Err(e) => return Err(e),
                     }
-
-                    if !job_processed {
-                        counter += 1;
-                        #[expect(clippy::cast_possible_truncation, reason = "poll interval in seconds fits in u32")]
-                        let poll_secs = poll_interval.as_secs() as u32;
-                        if counter >= poll_secs {
-                            counter = 0;
+                }
+                Err(e) => {
+                    tracing::error!(job_type, error = %e, "job handler failed");
+                    let job_repo = job_repo.clone();
+                    match transaction(&*repository, |tx| {
+                        let job = job.clone();
+                        Box::pin(async move { job_repo.fail(tx, job, e.to_string()).await })
+                    })
+                    .await
+                    {
+                        Ok(_) => {}
+                        Err(e) if e.is_transient() => {
+                            tracing::warn!("DB unavailable in worker (fail), pausing 10s: {e}");
+                            tokio::select! {
+                                () = subsys.on_shutdown_requested() => {
+                                    tracing::info!("JobWorker shutting down...");
+                                    break;
+                                }
+                                () = tokio::time::sleep(Duration::from_secs(10)) => {}
+                            }
                         }
+                        Err(e) => return Err(e),
                     }
-                    tokio::time::sleep(Duration::from_secs(1)).await;
                 }
             }
+            // Loop back immediately — no inter-job sleep.
         }
 
         Ok(())

@@ -150,21 +150,23 @@ async fn test_atomic_claim_under_concurrency() {
 //
 // Sequence:
 //   1. Register blocking handler, enqueue 2 jobs.
-//   2. Start subsystem in background.
-//   3. Wait for first handler to start (it blocks on release_rx).
-//   4. Release the in-flight handler so it can finish and commit its
-//      completion.
-//   5. Sleep briefly so the completion write commits before pool teardown.
-//   6. Abort the toplevel task (initiates shutdown).
-//   7. Assert count_all_pending == 1 (counts Pending + Running rows): job 1 =
-//      Completed (excluded), job 2 = Pending (counted).
+//   2. Start subsystem with a co-resident "shutdown trigger" subsystem.
+//   3. Trigger subsystem waits for handler_started, then calls request_shutdown().
+//   4. With shutdown signalled, the blocking handler is released.
+//   5. Worker commits job 1 completion, loops back, sees is_shutdown_requested(),
+//      breaks — never reaching the claim_next call that would pick up job 2.
+//   6. Assert count_all_pending == 1: job 1 = Completed, job 2 = Pending.
+//
+// Using request_shutdown() (graceful) rather than aborting the tokio task
+// ensures is_shutdown_requested() returns true inside the worker loop,
+// which is the code path being tested (MK-13).
 
 #[tokio::test]
 async fn test_graceful_drain() {
     use tokio::sync::oneshot;
 
     let ctx = setup().await;
-    let (release_tx, release_rx) = oneshot::channel();
+    let (release_tx, release_rx) = oneshot::channel::<()>();
     let release_rx = Arc::new(Mutex::new(Some(release_rx)));
     let handler_started = Arc::new(Mutex::new(false));
 
@@ -197,49 +199,57 @@ async fn test_graceful_drain() {
     core.job_service.enqueue(&TestPayload { value: 1 }).await.unwrap();
     core.job_service.enqueue(&TestPayload { value: 2 }).await.unwrap();
 
-    // Start the subsystem in the background.
+    // Start the subsystem with a co-resident shutdown-trigger subsystem.
+    // The trigger polls handler_started every 50ms; once the blocking handler
+    // has started, it calls subsys.request_shutdown() to set the graceful
+    // shutdown flag. This ensures is_shutdown_requested() returns true on the
+    // worker's next top-of-loop check (after job 1 is committed).
     let core_for_subsys = core.clone();
+    let handler_started_for_trigger = handler_started.clone();
     let toplevel_handle = tokio::spawn(async move {
         Toplevel::new(async move |s: &mut SubsystemHandle| {
             s.start(SubsystemBuilder::new("Core", create_core_subsystem(&core_for_subsys).into_subsystem()));
+            struct ShutdownTrigger {
+                started: Arc<Mutex<bool>>,
+            }
+            impl IntoSubsystem<mk_core::Error> for ShutdownTrigger {
+                async fn run(self, subsys: &mut SubsystemHandle) -> Result<(), mk_core::Error> {
+                    while !*self.started.lock().unwrap() {
+                        tokio::time::sleep(Duration::from_millis(50)).await;
+                    }
+                    // Handler has started — request graceful shutdown now so
+                    // is_shutdown_requested() is true by the time job 1 commits.
+                    subsys.request_shutdown();
+                    Ok(())
+                }
+            }
+            s.start(SubsystemBuilder::new(
+                "ShutdownTrigger",
+                ShutdownTrigger { started: handler_started_for_trigger }.into_subsystem(),
+            ));
         })
         .handle_shutdown_requests(Duration::from_secs(10))
         .await
     });
 
-    // Wait for the first handler to actually start.
+    // Wait for the trigger subsystem to confirm the handler started.
     let started = wait_until(|| *handler_started.lock().unwrap(), Duration::from_secs(10)).await;
     assert!(started, "handler should have started within 10s");
 
-    // Release the in-flight handler so it can finish and commit its completion.
+    // Shutdown has been requested (or will be shortly). Release the in-flight
+    // handler so it can complete and commit. The worker will see the shutdown
+    // flag on its next top-of-loop iteration and exit without claiming job 2.
     let _ = release_tx.send(());
 
-    // Give the handler a moment to complete and write its completion row.
-    // Timing coupling: the worker re-polls every poll_interval =
-    // Duration::from_secs(5) (set in crates/core/src/jobs/worker.rs). The 500ms
-    // sleep must be long enough for the handler's complete() write to commit,
-    // yet short enough that the worker has not yet reached its next claim_next
-    // call. 500ms is well within the 5-second re-poll window, so the second job
-    // will not be claimed before shutdown takes effect.
-    tokio::time::sleep(Duration::from_millis(500)).await;
-
-    // Now initiate shutdown — abort the toplevel task. Since the handler has
-    // already finished and committed, the second job never gets claimed because
-    // the worker's next claim_next attempt is preceded by a shutdown check.
-    toplevel_handle.abort();
-    let _ = toplevel_handle.await;
-
-    // Allow any final DB writes to settle.
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    // Wait for the toplevel to finish gracefully (it shuts down naturally after
+    // request_shutdown() is processed).
+    let _ = tokio::time::timeout(Duration::from_secs(15), toplevel_handle).await;
 
     // Assert: count_all_pending counts both Pending and Running rows.
     // Expected count is 1:
     //   - job 1 = Completed (excluded from count)
     //   - job 2 = Pending (counted — never claimed because shutdown stopped the
     //     worker loop before the next claim_next call)
-    // A count of 2 would mean either job 1 didn't complete (still Running) or
-    // job 2 was claimed (Running) before shutdown took effect — either is a
-    // failure of the drain semantics.
     let pending_or_running = transaction(&**ctx.repos.repository(), |tx| {
         let r = ctx.repos.job_repository().clone();
         Box::pin(async move { r.count_all_pending(tx).await })
