@@ -13,15 +13,23 @@ pub(crate) struct JobWorker {
     repository: Arc<dyn Repository>,
     job_repo: Arc<dyn JobRepository>,
     poll_interval: Duration,
+    notify: Arc<tokio::sync::Notify>,
 }
 
 impl JobWorker {
-    pub(crate) fn new(job_service: Arc<dyn JobService>, repository: Arc<dyn Repository>, job_repo: Arc<dyn JobRepository>, poll_interval: Duration) -> Self {
+    pub(crate) fn new(
+        job_service: Arc<dyn JobService>,
+        repository: Arc<dyn Repository>,
+        job_repo: Arc<dyn JobRepository>,
+        poll_interval: Duration,
+        notify: Arc<tokio::sync::Notify>,
+    ) -> Self {
         Self {
             job_service,
             repository,
             job_repo,
             poll_interval,
+            notify,
         }
     }
 }
@@ -32,14 +40,23 @@ impl IntoSubsystem<Error> for JobWorker {
         let repository = self.repository;
         let job_service = self.job_service;
         let poll_interval = self.poll_interval;
+        let notify = self.notify;
 
         loop {
-            // Top-of-loop shutdown check — covers the case where shutdown
-            // fires while no work is happening (between claim attempts).
+            // Top-of-loop shutdown check — covers shutdown firing while
+            // no work is happening between claim attempts.
             if subsys.is_shutdown_requested() {
                 tracing::info!("JobWorker shutting down...");
                 break;
             }
+
+            // Subscribe to wake notifications BEFORE checking the queue.
+            // Any notify_waiters() fired between enable() and the await
+            // in the None-branch below is delivered to this pinned future,
+            // closing the edge-trigger race window of notify_waiters().
+            let notified = notify.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
 
             // Try to claim a job.
             let claimed = {
@@ -62,12 +79,15 @@ impl IntoSubsystem<Error> for JobWorker {
             };
 
             let Some(job) = claimed else {
-                // No work right now — wait for poll_interval or shutdown.
+                // No work right now — wait for shutdown, OR an enqueue wake
+                // (possibly already delivered to `notified` above), OR the
+                // fallback poll heartbeat.
                 tokio::select! {
                     () = subsys.on_shutdown_requested() => {
                         tracing::info!("JobWorker shutting down...");
                         break;
                     }
+                    () = notified => {}
                     () = tokio::time::sleep(poll_interval) => {}
                 }
                 continue;
@@ -136,6 +156,7 @@ pub(crate) struct JobWorkerSubsystem {
     job_service: Arc<dyn JobService>,
     job_repo: Arc<dyn JobRepository>,
     repository: Arc<dyn Repository>,
+    notify: Arc<tokio::sync::Notify>,
 }
 
 impl IntoSubsystem<Error> for JobWorkerSubsystem {
@@ -157,7 +178,13 @@ impl IntoSubsystem<Error> for JobWorkerSubsystem {
         }
 
         for i in 0..self.concurrency {
-            let worker = JobWorker::new(self.job_service.clone(), self.repository.clone(), self.job_repo.clone(), Duration::from_secs(5));
+            let worker = JobWorker::new(
+                self.job_service.clone(),
+                self.repository.clone(),
+                self.job_repo.clone(),
+                Duration::from_secs(5),
+                self.notify.clone(),
+            );
             subsys.start(SubsystemBuilder::new(format!("job-worker-{i}"), worker.into_subsystem()));
         }
 
@@ -175,6 +202,7 @@ pub(crate) fn create_job_worker_subsystem(core: &Arc<CoreServices>) -> JobWorker
         job_service: core.job_service.clone(),
         job_repo: core.repository_service.job_repository().clone(),
         repository: core.repository_service.repository().clone(),
+        notify: core.wake_notify.clone(),
     }
 }
 

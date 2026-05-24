@@ -72,8 +72,8 @@ async fn test_register_enqueue_observe() {
     ctx.services.job_service.enqueue(&TestPayload { value: 42 }).await.expect("enqueue");
 
     // Wait for the worker to process it.
-    let processed = wait_until(|| !observed.lock().unwrap().is_empty(), Duration::from_secs(10)).await;
-    assert!(processed, "worker should have picked up the job within 10s");
+    let processed = wait_until(|| !observed.lock().unwrap().is_empty(), Duration::from_millis(500)).await;
+    assert!(processed, "worker should have picked up the job within 500ms (wake-on-enqueue)");
     assert_eq!(*observed.lock().unwrap(), vec![42]);
 
     // Tear down.
@@ -265,6 +265,49 @@ async fn test_graceful_drain() {
         pending_or_running, 1,
         "expected exactly 1 pending-or-running job after drain (got {pending_or_running})"
     );
+}
+
+// ─── Test 5: wake fires worker mid-poll (MK-16) ───────────────────────────
+
+#[tokio::test]
+async fn test_wake_mid_poll() {
+    let ctx = setup().await;
+    let observed = Arc::new(Mutex::new(vec![]));
+    ctx.services.job_service.register(RecordingHandler { observed: observed.clone() });
+
+    // Start subsystem with NO pending jobs. Workers will call claim_next
+    // (return None) and enter the None-branch select! to block.
+    let core = ctx.services.clone();
+    let toplevel_handle = tokio::spawn(async move {
+        let core_subsystem = create_core_subsystem(&core);
+        Toplevel::new(async move |s: &mut SubsystemHandle| {
+            s.start(SubsystemBuilder::new("Core", core_subsystem.into_subsystem()));
+        })
+        .handle_shutdown_requests(Duration::from_secs(5))
+        .await
+    });
+
+    // Wait long enough for workers to be genuinely inside the select's
+    // poll-interval sleep arm.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Enqueue. notify_waiters() fires, worker wakes from the 5s sleep.
+    let enqueue_start = std::time::Instant::now();
+    ctx.services.job_service.enqueue(&TestPayload { value: 99 }).await.unwrap();
+
+    let processed = wait_until(|| !observed.lock().unwrap().is_empty(), Duration::from_millis(500)).await;
+    assert!(processed, "wake should have fired worker mid-poll within 500ms");
+
+    let elapsed = enqueue_start.elapsed();
+    assert!(
+        elapsed < Duration::from_secs(2),
+        "wake-driven claim took {}ms — should be near-instant, well under the 5s poll interval",
+        elapsed.as_millis()
+    );
+    assert_eq!(*observed.lock().unwrap(), vec![99]);
+
+    toplevel_handle.abort();
+    let _ = toplevel_handle.await;
 }
 
 // ─── Test 4: crash recovery on startup ─────────────────────────────────────
