@@ -50,6 +50,7 @@ pub struct CoreServices {
     pub job_service: Arc<dyn JobService>,
     pub repository_service: Arc<RepositoryService>,
     pub job_concurrency: usize,
+    pub(crate) wake_notify: Arc<tokio::sync::Notify>,
 }
 
 impl CoreServices {
@@ -62,7 +63,7 @@ impl CoreServices {
             job_concurrency,
         } = external;
 
-        let job_service = create_job_service(repository_service.clone());
+        let (job_service, wake_notify) = create_job_service(repository_service.clone());
 
         Self {
             auth_service: Arc::new(AuthServiceImpl::new(repository_service.clone())),
@@ -74,6 +75,7 @@ impl CoreServices {
             job_service,
             repository_service,
             job_concurrency,
+            wake_notify,
         }
     }
 }
