@@ -1,9 +1,11 @@
 pub mod handler;
 pub mod model;
+pub mod repository;
 
 pub use handler::{ErasedJobHandler, JobHandler};
 pub use model::{Job, JobId, JobStatus};
 pub use priority::{PRIORITY_HEALTH, PRIORITY_NORMAL, PRIORITY_USER};
+pub use repository::{Enqueueable, JobRepository, JobRepositoryExt};
 
 pub mod priority {
     /// Periodic health checks.

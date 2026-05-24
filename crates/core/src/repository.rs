@@ -5,6 +5,7 @@ use derive_builder::Builder;
 use crate::{
     Error,
     auth::SessionRepository,
+    jobs::JobRepository,
     user::{UserRepository, UserSettingRepository},
 };
 
@@ -15,6 +16,7 @@ pub struct RepositoryService {
     session_repository: Arc<dyn SessionRepository>,
     user_repository: Arc<dyn UserRepository>,
     user_setting_repository: Arc<dyn UserSettingRepository>,
+    job_repository: Arc<dyn JobRepository>,
 }
 
 impl RepositoryService {
@@ -40,6 +42,12 @@ impl RepositoryService {
     #[must_use]
     pub fn user_setting_repository(&self) -> &Arc<dyn UserSettingRepository> {
         &self.user_setting_repository
+    }
+
+    /// Returns a reference to the job repository.
+    #[must_use]
+    pub fn job_repository(&self) -> &Arc<dyn JobRepository> {
+        &self.job_repository
     }
 }
 
@@ -170,6 +178,7 @@ pub(crate) mod testing {
     use crate::{
         Error,
         auth::repository::MockSessionRepository,
+        jobs::repository::MockJobRepository,
         user::repository::{user::MockUserRepository, user_settings::MockUserSettingRepository},
     };
 
@@ -211,5 +220,6 @@ pub(crate) mod testing {
             .session_repository(Arc::new(MockSessionRepository::new()))
             .user_repository(Arc::new(MockUserRepository::new()))
             .user_setting_repository(Arc::new(MockUserSettingRepository::new()))
+            .job_repository(Arc::new(MockJobRepository::new()))
     }
 }

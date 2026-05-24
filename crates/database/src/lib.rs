@@ -13,6 +13,7 @@ use std::sync::Arc;
 use mk_core::{
     Error,
     auth::SessionRepository,
+    jobs::JobRepository,
     repository::{Repository, RepositoryService, RepositoryServiceBuilder},
     user::{UserRepository, UserSettingRepository},
 };
@@ -26,12 +27,14 @@ pub use error::*;
 mod adapters;
 mod entities;
 mod migrations;
+mod nop_job_repository;
 mod repository;
 mod transaction;
 
 use crate::{
     adapters::{session::SessionRepositoryAdapter, user::UserRepositoryAdapter, user_settings::UserSettingRepositoryAdapter},
     migrations::Migrator,
+    nop_job_repository::NopJobRepository,
     repository::RepositoryImpl,
 };
 
@@ -72,6 +75,7 @@ pub async fn create_repository_service(database: DatabaseConnection) -> Result<A
         .session_repository(Arc::new(SessionRepositoryAdapter::new()) as Arc<dyn SessionRepository>)
         .user_repository(Arc::new(UserRepositoryAdapter::new()) as Arc<dyn UserRepository>)
         .user_setting_repository(Arc::new(UserSettingRepositoryAdapter::new()) as Arc<dyn UserSettingRepository>)
+        .job_repository(Arc::new(NopJobRepository) as Arc<dyn JobRepository>)
         .build()
         .map_err(|e| Error::Infrastructure(e.to_string()))?;
 
