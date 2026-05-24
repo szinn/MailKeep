@@ -4,8 +4,8 @@ use std::{
 };
 
 use mk_core::{
-    Error,
-    jobs::{Enqueueable, JobHandler, JobServiceExt, PRIORITY_NORMAL, create_job_worker_subsystem},
+    Error, create_core_subsystem,
+    jobs::{Enqueueable, JobHandler, JobServiceExt, PRIORITY_NORMAL},
     repository::transaction,
 };
 use serde::{Deserialize, Serialize};
@@ -60,9 +60,9 @@ async fn test_register_enqueue_observe() {
     // Spawn the subsystem in the background.
     let core = ctx.services.clone();
     let toplevel_handle = tokio::spawn(async move {
-        let jobs_subsystem = create_job_worker_subsystem(&core);
+        let core_subsystem = create_core_subsystem(&core);
         Toplevel::new(async move |s: &mut SubsystemHandle| {
-            s.start(SubsystemBuilder::new("Jobs", jobs_subsystem.into_subsystem()));
+            s.start(SubsystemBuilder::new("Core", core_subsystem.into_subsystem()));
         })
         .handle_shutdown_requests(Duration::from_secs(5))
         .await
@@ -201,7 +201,7 @@ async fn test_graceful_drain() {
     let core_for_subsys = core.clone();
     let toplevel_handle = tokio::spawn(async move {
         Toplevel::new(async move |s: &mut SubsystemHandle| {
-            s.start(SubsystemBuilder::new("Jobs", create_job_worker_subsystem(&core_for_subsys).into_subsystem()));
+            s.start(SubsystemBuilder::new("Core", create_core_subsystem(&core_for_subsys).into_subsystem()));
         })
         .handle_shutdown_requests(Duration::from_secs(10))
         .await
@@ -296,9 +296,9 @@ async fn test_crash_recovery_on_startup() {
     // completes it normally.
     let core = ctx.services.clone();
     let toplevel_handle = tokio::spawn(async move {
-        let jobs_subsystem = create_job_worker_subsystem(&core);
+        let core_subsystem = create_core_subsystem(&core);
         Toplevel::new(async move |s: &mut SubsystemHandle| {
-            s.start(SubsystemBuilder::new("Jobs", jobs_subsystem.into_subsystem()));
+            s.start(SubsystemBuilder::new("Core", core_subsystem.into_subsystem()));
         })
         .handle_shutdown_requests(Duration::from_secs(5))
         .await

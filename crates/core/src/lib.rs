@@ -12,11 +12,12 @@ use std::sync::Arc;
 
 use derive_builder::Builder;
 pub use error::{Error, ErrorKind, RepositoryError};
+use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, SubsystemHandle};
 
 use crate::{
     auth::{AuthService, AuthServiceImpl},
     crypto::CipherService,
-    jobs::{JobService, create_job_service},
+    jobs::{JobService, create_job_service, create_job_worker_subsystem},
     repository::RepositoryService,
     storage::{AttachmentStorageService, RawStorageService},
     user::{UserService, UserServiceImpl, UserSettingService, UserSettingServiceImpl},
@@ -79,4 +80,28 @@ impl CoreServices {
 
 pub fn create_services(external: ExternalServices) -> Result<Arc<CoreServices>, Error> {
     Ok(Arc::new(CoreServices::new(external)))
+}
+
+pub struct CoreSubsystem {
+    core: Arc<CoreServices>,
+}
+
+impl IntoSubsystem<Error> for CoreSubsystem {
+    async fn run(self, subsys: &mut SubsystemHandle) -> Result<(), Error> {
+        tracing::info!("CoreSubsystem starting...");
+
+        let jobs = create_job_worker_subsystem(&self.core);
+
+        subsys.start(SubsystemBuilder::new("Jobs", jobs.into_subsystem()));
+
+        tracing::info!("CoreSubsystem started");
+
+        subsys.on_shutdown_requested().await;
+        Ok(())
+    }
+}
+
+#[must_use]
+pub fn create_core_subsystem(core: &Arc<CoreServices>) -> CoreSubsystem {
+    CoreSubsystem { core: core.clone() }
 }

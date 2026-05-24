@@ -39,7 +39,7 @@ async fn cmd_server(config: mailkeep::config::Config) -> anyhow::Result<()> {
     use std::time::Duration;
 
     use anyhow::Context;
-    use mk_core::{ExternalServicesBuilder, create_services, jobs::create_job_worker_subsystem};
+    use mk_core::{ExternalServicesBuilder, create_core_subsystem, create_services};
     use mk_database::{create_repository_service, open_database};
     use mk_frontend::server::create_frontend_subsystem;
     use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, SubsystemHandle, Toplevel};
@@ -70,12 +70,12 @@ async fn cmd_server(config: mailkeep::config::Config) -> anyhow::Result<()> {
     let oidc_config = if config.oidc.is_set() { Some(config.oidc.clone()) } else { None };
     let frontend_subsystem = create_frontend_subsystem(&config.frontend, oidc_config, core_services.clone());
 
-    let jobs_subsystem = create_job_worker_subsystem(&core_services);
+    let core_subsystem = create_core_subsystem(&core_services);
 
     span.exit();
 
     Toplevel::new(async |s: &mut SubsystemHandle| {
-        s.start(SubsystemBuilder::new("Jobs", jobs_subsystem.into_subsystem()));
+        s.start(SubsystemBuilder::new("Core", core_subsystem.into_subsystem()));
         s.start(SubsystemBuilder::new("Frontend", frontend_subsystem.into_subsystem()));
     })
     .catch_signals()

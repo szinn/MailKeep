@@ -8,7 +8,7 @@ use crate::{
     repository::{Repository, transaction},
 };
 
-pub struct JobWorker {
+pub(crate) struct JobWorker {
     job_service: Arc<dyn JobService>,
     repository: Arc<dyn Repository>,
     job_repo: Arc<dyn JobRepository>,
@@ -16,7 +16,7 @@ pub struct JobWorker {
 }
 
 impl JobWorker {
-    pub fn new(job_service: Arc<dyn JobService>, repository: Arc<dyn Repository>, job_repo: Arc<dyn JobRepository>, poll_interval: Duration) -> Self {
+    pub(crate) fn new(job_service: Arc<dyn JobService>, repository: Arc<dyn Repository>, job_repo: Arc<dyn JobRepository>, poll_interval: Duration) -> Self {
         Self {
             job_service,
             repository,
@@ -32,17 +32,6 @@ impl IntoSubsystem<Error> for JobWorker {
         let repository = self.repository;
         let job_service = self.job_service;
         let poll_interval = self.poll_interval;
-
-        // Crash recovery: reset any jobs left running from a previous crash.
-        let reset = transaction(&*repository, |tx| {
-            let job_repo = job_repo.clone();
-            Box::pin(async move { job_repo.reset_running_to_pending(tx).await })
-        })
-        .await?;
-
-        if reset > 0 {
-            tracing::warn!("reset {} running jobs to pending after startup", reset);
-        }
 
         let mut counter: u32 = 0;
         loop {
@@ -135,7 +124,7 @@ impl IntoSubsystem<Error> for JobWorker {
     }
 }
 
-pub struct JobWorkerSubsystem {
+pub(crate) struct JobWorkerSubsystem {
     concurrency: usize,
     job_service: Arc<dyn JobService>,
     job_repo: Arc<dyn JobRepository>,
@@ -144,16 +133,35 @@ pub struct JobWorkerSubsystem {
 
 impl IntoSubsystem<Error> for JobWorkerSubsystem {
     async fn run(self, subsys: &mut SubsystemHandle) -> Result<(), Error> {
+        tracing::info!("JobWorkerSubsystem starting {} workers...", self.concurrency);
+
+        // Crash recovery: reset any jobs left running from a previous crash.
+        let job_repo = self.job_repo.clone();
+        let repository = self.repository.clone();
+
+        let reset = transaction(&*repository, |tx| {
+            let job_repo = job_repo.clone();
+            Box::pin(async move { job_repo.reset_running_to_pending(tx).await })
+        })
+        .await?;
+
+        if reset > 0 {
+            tracing::warn!("reset {} running jobs to pending after startup", reset);
+        }
+
         for i in 0..self.concurrency {
             let worker = JobWorker::new(self.job_service.clone(), self.repository.clone(), self.job_repo.clone(), Duration::from_secs(5));
             subsys.start(SubsystemBuilder::new(format!("job-worker-{i}"), worker.into_subsystem()));
         }
+
+        tracing::info!("JobWorkerSubsystem started");
+
         subsys.on_shutdown_requested().await;
         Ok(())
     }
 }
 
-pub fn create_job_worker_subsystem(core: &Arc<CoreServices>) -> JobWorkerSubsystem {
+pub(crate) fn create_job_worker_subsystem(core: &Arc<CoreServices>) -> JobWorkerSubsystem {
     let concurrency = core.job_concurrency.max(1);
     JobWorkerSubsystem {
         concurrency,
