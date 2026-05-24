@@ -2,6 +2,7 @@
 
 pub(crate) mod prelude;
 
+pub(crate) mod jobs;
 pub(crate) mod sessions;
 pub(crate) mod user_settings;
 pub(crate) mod users;
