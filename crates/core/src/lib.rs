@@ -2,6 +2,7 @@ pub mod account;
 pub mod auth;
 pub mod crypto;
 pub mod error;
+pub mod jobs;
 pub mod repository;
 pub mod storage;
 pub mod types;
