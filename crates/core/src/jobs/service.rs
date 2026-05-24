@@ -243,7 +243,7 @@ mod tests {
 
         let mock = MockJobRepository::new();
         let svc = create_service(mock);
-        svc.register_handler("test.job".to_string(), Arc::new(TestHandler));
+        svc.register(TestHandler);
 
         svc.dispatch("test.job", serde_json::json!({})).await.unwrap();
     }
@@ -254,14 +254,45 @@ mod tests {
         let svc = create_service(mock);
 
         let result = svc.dispatch("unknown.job", serde_json::json!({})).await;
-        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::Infrastructure(_))));
+    }
+
+    #[tokio::test]
+    async fn enqueue_raw_delegates_to_repo() {
+        use crate::jobs::PRIORITY_NORMAL;
+
+        let mut mock = MockJobRepository::new();
+        mock.expect_enqueue_raw().once().returning(|_, job_type, payload, priority| {
+            assert_eq!(job_type, "test.job");
+            assert_eq!(priority, PRIORITY_NORMAL);
+            assert_eq!(payload, serde_json::json!({"k": "v"}));
+            Box::pin(std::future::ready(Ok(crate::jobs::Job {
+                id: 1,
+                job_type: job_type.to_owned(),
+                payload,
+                status: crate::jobs::JobStatus::Pending,
+                priority,
+                attempt: 0,
+                max_attempts: 3,
+                version: 0,
+                scheduled_at: chrono::Utc::now(),
+                started_at: None,
+                completed_at: None,
+                error_message: None,
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+            })))
+        });
+
+        let svc = create_service(mock);
+        svc.enqueue_raw("test.job", serde_json::json!({"k": "v"}), PRIORITY_NORMAL).await.unwrap();
     }
 
     #[tokio::test]
     async fn enqueue_raw_delayed_delegates_to_repo() {
         use chrono::Duration;
 
-        use crate::jobs::{PRIORITY_NORMAL, repository::MockJobRepository};
+        use crate::jobs::PRIORITY_NORMAL;
 
         let mut mock = MockJobRepository::new();
         mock.expect_enqueue_delayed().once().returning(|_, job_type, _, priority, delay| {
