@@ -151,10 +151,12 @@ async fn test_atomic_claim_under_concurrency() {
 // Sequence:
 //   1. Register blocking handler, enqueue 2 jobs.
 //   2. Start subsystem with a co-resident "shutdown trigger" subsystem.
-//   3. Trigger subsystem waits for handler_started, then calls request_shutdown().
+//   3. Trigger subsystem waits for handler_started, then calls
+//      request_shutdown().
 //   4. With shutdown signalled, the blocking handler is released.
-//   5. Worker commits job 1 completion, loops back, sees is_shutdown_requested(),
-//      breaks — never reaching the claim_next call that would pick up job 2.
+//   5. Worker commits job 1 completion, loops back, sees
+//      is_shutdown_requested(), breaks — never reaching the claim_next call
+//      that would pick up job 2.
 //   6. Assert count_all_pending == 1: job 1 = Completed, job 2 = Pending.
 //
 // Using request_shutdown() (graceful) rather than aborting the tokio task
@@ -225,7 +227,10 @@ async fn test_graceful_drain() {
             }
             s.start(SubsystemBuilder::new(
                 "ShutdownTrigger",
-                ShutdownTrigger { started: handler_started_for_trigger }.into_subsystem(),
+                ShutdownTrigger {
+                    started: handler_started_for_trigger,
+                }
+                .into_subsystem(),
             ));
         })
         .handle_shutdown_requests(Duration::from_secs(10))

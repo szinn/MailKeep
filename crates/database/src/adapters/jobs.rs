@@ -333,6 +333,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn priority_ordered_claim() {
+        use mk_core::jobs::{PRIORITY_NORMAL, PRIORITY_USER};
+
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        // Enqueue normal-priority FIRST so insertion order can't accidentally
+        // satisfy the assertion via FIFO behavior.
+        let normal = svc
+            .job_repository()
+            .enqueue_raw(&*tx, "normal.job", serde_json::json!({}), PRIORITY_NORMAL)
+            .await
+            .unwrap();
+        let user = svc
+            .job_repository()
+            .enqueue_raw(&*tx, "user.job", serde_json::json!({}), PRIORITY_USER)
+            .await
+            .unwrap();
+
+        let first = svc.job_repository().claim_next(&*tx).await.unwrap().unwrap();
+        assert_eq!(
+            first.id, user.id,
+            "PRIORITY_USER ({}) job should be claimed before PRIORITY_NORMAL ({})",
+            PRIORITY_USER, PRIORITY_NORMAL
+        );
+
+        let second = svc.job_repository().claim_next(&*tx).await.unwrap().unwrap();
+        assert_eq!(second.id, normal.id, "PRIORITY_NORMAL job should be claimed second");
+    }
+
+    #[tokio::test]
     async fn test_claim_next_skips_already_running() {
         let svc = setup().await;
         let tx = svc.repository().begin().await.unwrap();
@@ -349,6 +380,22 @@ mod tests {
     }
 
     // ─── complete ─────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn version_bumps_at_each_step() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let enqueued = svc.job_repository().enqueue_raw(&*tx, "test_job", serde_json::json!({}), 0).await.unwrap();
+        assert_eq!(enqueued.version, 0, "freshly enqueued job should have version 0");
+
+        let claimed = svc.job_repository().claim_next(&*tx).await.unwrap().unwrap();
+        assert_eq!(claimed.id, enqueued.id);
+        assert_eq!(claimed.version, 1, "claim_next should bump version to 1");
+
+        let completed = svc.job_repository().complete(&*tx, claimed).await.unwrap();
+        assert_eq!(completed.version, 2, "complete should bump version to 2");
+    }
 
     #[tokio::test]
     async fn test_complete_sets_status_and_timestamp() {
@@ -377,8 +424,17 @@ mod tests {
         let failed = svc.job_repository().fail(&*tx, claimed, "transient error".to_owned()).await.unwrap();
         assert_eq!(failed.status, JobStatus::Pending);
         assert_eq!(failed.error_message.as_deref(), Some("transient error"));
-        // scheduled_at should be in the future
-        assert!(failed.scheduled_at > failed.updated_at);
+        // The backoff is 30s * 2^attempt — for attempt=1 (after one claim),
+        // that's exactly 60s (both timestamps share a single Utc::now() in
+        // the adapter, so there is no execution-time drift). Window of
+        // [55s, 65s] defends against future refactors that split the now
+        // variable while still pinning the spec value tightly.
+        let backoff = failed.scheduled_at - failed.updated_at;
+        assert!(
+            backoff >= chrono::Duration::seconds(55) && backoff <= chrono::Duration::seconds(65),
+            "expected backoff in [55s, 65s] for attempt=1 (spec: 60s), got {}s",
+            backoff.num_seconds()
+        );
     }
 
     #[tokio::test]
