@@ -1,13 +1,6 @@
 [workspace]
 resolver = "3"
-members = [
-    "crates/core",
-    "crates/database",
-    "crates/storage",
-    "crates/utils",
-    "crates/mailkeep",
-    "crates/integration-tests",
-]
+members = ["crates/mailkeep", "crates/integration-tests"]
 
 [workspace.package]
 version = "0.1.0"
@@ -37,10 +30,10 @@ thiserror = "2.0.18"
 # Crypto
 argon2 = { version = "0.5.3", features = ["std"] }
 chacha20poly1305 = "0.10.1"
-hkdf = "0.12.4"
+hkdf = "0.13.0"
 rand = "0.10.1"
 secrecy = "0.10.3"
-sha2 = "0.10.9"
+sha2 = "0.11.0"
 
 # Memory management
 mimalloc = "0.1.52"
