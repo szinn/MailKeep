@@ -70,6 +70,10 @@ in its `lib.rs` — same pattern as `ApiSubsystem` in `bb-api`. The subsystem's 
 child subsystems via `subsys.start(SubsystemBuilder::new(...))` then awaits `on_shutdown_requested()`.
 `mailkeep/main.rs` stays clean: call the factories, pass results to `Toplevel`).
 
+## Database
+
+Persistence uses SeaORM with Postgres, MySQL, and SQLite support. See @.claude/Database.md for migration naming conventions, adapter patterns, and SQLite-specific notes.
+
 ## Frontend
 
 The frontend is built using Dioxus. See @.claude/Dioxus.md for more info.

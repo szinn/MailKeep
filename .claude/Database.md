@@ -30,6 +30,16 @@ produce a corrupt or out-of-date snapshot.
 
 ## SeaORM Adapter Patterns
 
+**No raw SQL.** All queries MUST use SeaORM's portable query builder API (`Entity::find()`, `Entity::insert()`, `Entity::update_many()`, `Condition`, `Query::select()`, etc.). Raw SQL via `Statement::from_string` / `Statement::from_sql_and_values` is forbidden because it is not portable across the supported backends (Postgres, MySQL, SQLite) and silently diverges in behavior. If portable SeaORM doesn't express what you need (e.g. `FOR UPDATE SKIP LOCKED`), solve it at a higher layer — application-level synchronization, optimistic concurrency, or rethinking the design — rather than reaching for backend-specific SQL.
+
+**Migration file naming:** `m<yyyymmdd>_<serial>_<description>.rs` where:
+
+- `<yyyymmdd>` is the date the migration is added (e.g. `20260524`).
+- `<serial>` is a **6-digit, monotonically increasing** counter across the entire migration history — NOT reset per day. If the last migration was `m20260520_000003_create_user_settings_table.rs`, the next is `m20260524_000004_*.rs` (continues 000004), not `m20260524_000001_*.rs`.
+- `<description>` is a snake_case summary of what the migration does (e.g. `create_jobs_table`).
+
+Register every new migration in `crates/database/src/migrations/mod.rs` in two places: the `mod` declarations and the `Migrator::migrations()` vector. Both must list migrations in serial order.
+
 **Migrations:** Only `up()` migrations need to be implemented. The `down()` method can just
 be empty.
 
