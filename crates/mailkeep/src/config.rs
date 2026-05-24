@@ -14,6 +14,12 @@ pub struct Config {
     pub frontend: FrontendConfig,
     #[serde(default)]
     pub oidc: OidcConfig,
+    #[serde(default = "default_job_concurrency")]
+    pub job_concurrency: usize,
+}
+
+fn default_job_concurrency() -> usize {
+    1
 }
 
 impl Config {

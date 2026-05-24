@@ -74,4 +74,5 @@ pub fn default_external_services_builder() -> ExternalServicesBuilder {
         .cipher_service(test_cipher_service())
         .raw_storage_service(Arc::new(NopRawStorage) as Arc<dyn RawStorageService>)
         .attachment_storage_service(Arc::new(NopAttachmentStorage) as Arc<dyn AttachmentStorageService>)
+        .job_concurrency(1)
 }

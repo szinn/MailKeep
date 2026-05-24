@@ -62,6 +62,7 @@ async fn cmd_server(config: mailkeep::config::Config) -> anyhow::Result<()> {
         .cipher_service(cipher_service)
         .raw_storage_service(storage_service.raw_storage_service)
         .attachment_storage_service(storage_service.attachment_storage_service)
+        .job_concurrency(config.job_concurrency)
         .build()
         .context("ExternalServices missing required field")?;
     let core_services = create_services(external).context("Couldn't create core services")?;
