@@ -356,7 +356,7 @@ async fn callback_handler(
         Ok(None) => {
             tracing::error!(
                 email = %email,
-                "OIDC callback: no MailKeep user with this email — check that a BookBoss user has this exact email_address (case-sensitive)"
+                "OIDC callback: no MailKeep user with this email — check that a MailKeep user has this exact email_address (case-sensitive)"
             );
             return failure_redirect();
         }
