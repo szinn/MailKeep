@@ -26,7 +26,10 @@ mk-database.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
 sea-orm.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 tokio.workspace = true
+tokio-graceful-shutdown.workspace = true
 
 [lints]
 workspace = true

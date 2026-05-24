@@ -3293,7 +3293,10 @@ dependencies = [
  "mk-core",
  "mk-database",
  "sea-orm",
+ "serde",
+ "serde_json",
  "tokio",
+ "tokio-graceful-shutdown",
 ]
 
 [[package]]
