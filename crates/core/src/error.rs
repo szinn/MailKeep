@@ -54,6 +54,9 @@ pub enum Error {
     #[error("Decryption failed")]
     DecryptionFailed,
 
+    #[error("failed to deserialize credentials after decrypt: {0}")]
+    CredentialsDeserialize(String),
+
     #[error(transparent)]
     RepositoryError(#[from] RepositoryError),
 
@@ -69,7 +72,9 @@ impl Error {
         match self {
             Self::InvalidId(_) | Self::InvalidPageSize(_) | Self::InvalidToken(_) => ErrorKind::BadRequest,
             Self::Validation(_) => ErrorKind::InvalidInput,
-            Self::InvalidTransactionType | Self::Infrastructure(_) | Self::CryptoError(_) | Self::DecryptionFailed => ErrorKind::Internal,
+            Self::InvalidTransactionType | Self::Infrastructure(_) | Self::CryptoError(_) | Self::DecryptionFailed | Self::CredentialsDeserialize(_) => {
+                ErrorKind::Internal
+            }
             Self::StorageUnavailable(_) => ErrorKind::ServiceUnavailable,
             Self::BlobNotFound { .. } => ErrorKind::NotFound,
             Self::RepositoryError(e) => e.kind(),
