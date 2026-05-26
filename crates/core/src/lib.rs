@@ -16,6 +16,7 @@ pub use error::{Error, ErrorKind, RepositoryError};
 use tokio_graceful_shutdown::{IntoSubsystem, SubsystemBuilder, SubsystemHandle};
 
 use crate::{
+    account::{AccountService, AccountServiceImpl},
     auth::{AuthService, AuthServiceImpl},
     crypto::CipherService,
     jobs::{JobService, create_job_service, create_job_worker_subsystem},
@@ -42,6 +43,7 @@ pub struct ExternalServices {
 }
 
 pub struct CoreServices {
+    pub account_service: Arc<dyn AccountService>,
     pub auth_service: Arc<dyn AuthService>,
     pub user_service: Arc<dyn UserService>,
     pub user_setting_service: Arc<dyn UserSettingService>,
@@ -67,6 +69,12 @@ impl CoreServices {
         let (job_service, wake_notify) = create_job_service(repository_service.clone());
 
         Self {
+            account_service: Arc::new(AccountServiceImpl::new(
+                repository_service.clone(),
+                cipher_service.clone(),
+                raw_storage_service.clone(),
+                attachment_storage_service.clone(),
+            )),
             auth_service: Arc::new(AuthServiceImpl::new(repository_service.clone())),
             user_service: Arc::new(UserServiceImpl::new(repository_service.clone())),
             user_setting_service: Arc::new(UserSettingServiceImpl::new(repository_service.clone())),

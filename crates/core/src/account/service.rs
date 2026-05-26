@@ -52,8 +52,6 @@ pub struct PartialAccountInput {
     pub username: Option<String>,
 }
 
-// TODO(MK-3 Task 7): wired into CoreServices; remove allow(dead_code).
-#[allow(dead_code)]
 pub(crate) struct AccountServiceImpl {
     repository_service: Arc<RepositoryService>,
     cipher_service: Arc<dyn CipherService>,
@@ -61,7 +59,6 @@ pub(crate) struct AccountServiceImpl {
     attachment_storage_service: Arc<dyn AttachmentStorageService>,
 }
 
-#[allow(dead_code)]
 impl AccountServiceImpl {
     pub(crate) fn new(
         repository_service: Arc<RepositoryService>,
