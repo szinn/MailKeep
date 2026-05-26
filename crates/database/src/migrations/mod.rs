@@ -4,6 +4,7 @@ mod m20260520_000001_create_users_table;
 mod m20260520_000002_create_sessions_table;
 mod m20260520_000003_create_user_settings_table;
 mod m20260524_000004_create_jobs_table;
+mod m20260525_000005_create_accounts_table;
 
 pub struct Migrator;
 
@@ -15,6 +16,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260520_000002_create_sessions_table::Migration),
             Box::new(m20260520_000003_create_user_settings_table::Migration),
             Box::new(m20260524_000004_create_jobs_table::Migration),
+            Box::new(m20260525_000005_create_accounts_table::Migration),
         ]
     }
 }
