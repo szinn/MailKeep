@@ -12,6 +12,7 @@ use std::sync::Arc;
 
 use mk_core::{
     Error,
+    account::AccountRepository,
     auth::SessionRepository,
     jobs::JobRepository,
     repository::{Repository, RepositoryService, RepositoryServiceBuilder},
@@ -31,7 +32,10 @@ mod repository;
 mod transaction;
 
 use crate::{
-    adapters::{jobs::JobRepositoryAdapter, session::SessionRepositoryAdapter, user::UserRepositoryAdapter, user_settings::UserSettingRepositoryAdapter},
+    adapters::{
+        account::AccountRepositoryAdapter, jobs::JobRepositoryAdapter, session::SessionRepositoryAdapter, user::UserRepositoryAdapter,
+        user_settings::UserSettingRepositoryAdapter,
+    },
     migrations::Migrator,
     repository::RepositoryImpl,
 };
@@ -70,6 +74,7 @@ pub async fn create_repository_service(database: DatabaseConnection) -> Result<A
 
     let repository_service = RepositoryServiceBuilder::default()
         .repository(Arc::new(RepositoryImpl::new(database)) as Arc<dyn Repository>)
+        .account_repository(Arc::new(AccountRepositoryAdapter::new()) as Arc<dyn AccountRepository>)
         .session_repository(Arc::new(SessionRepositoryAdapter::new()) as Arc<dyn SessionRepository>)
         .user_repository(Arc::new(UserRepositoryAdapter::new()) as Arc<dyn UserRepository>)
         .user_setting_repository(Arc::new(UserSettingRepositoryAdapter::new()) as Arc<dyn UserSettingRepository>)

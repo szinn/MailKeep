@@ -4,6 +4,7 @@ use derive_builder::Builder;
 
 use crate::{
     Error,
+    account::AccountRepository,
     auth::SessionRepository,
     jobs::JobRepository,
     user::{UserRepository, UserSettingRepository},
@@ -13,6 +14,7 @@ use crate::{
 #[builder(pattern = "owned")]
 pub struct RepositoryService {
     repository: Arc<dyn Repository>,
+    account_repository: Arc<dyn AccountRepository>,
     session_repository: Arc<dyn SessionRepository>,
     user_repository: Arc<dyn UserRepository>,
     user_setting_repository: Arc<dyn UserSettingRepository>,
@@ -24,6 +26,12 @@ impl RepositoryService {
     #[must_use]
     pub fn repository(&self) -> &Arc<dyn Repository> {
         &self.repository
+    }
+
+    /// Returns a reference to the account repository.
+    #[must_use]
+    pub fn account_repository(&self) -> &Arc<dyn AccountRepository> {
+        &self.account_repository
     }
 
     /// Returns a reference to the session repository.
@@ -177,6 +185,7 @@ pub(crate) mod testing {
     use super::{MockRepository, RepositoryServiceBuilder, Transaction};
     use crate::{
         Error,
+        account::repository::MockAccountRepository,
         auth::repository::MockSessionRepository,
         jobs::repository::MockJobRepository,
         user::repository::{user::MockUserRepository, user_settings::MockUserSettingRepository},
@@ -217,6 +226,7 @@ pub(crate) mod testing {
     pub(crate) fn default_repository_service_builder() -> RepositoryServiceBuilder {
         RepositoryServiceBuilder::default()
             .repository(Arc::new(make_mock_repo()))
+            .account_repository(Arc::new(MockAccountRepository::new()))
             .session_repository(Arc::new(MockSessionRepository::new()))
             .user_repository(Arc::new(MockUserRepository::new()))
             .user_setting_repository(Arc::new(MockUserSettingRepository::new()))
