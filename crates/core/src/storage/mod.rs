@@ -9,3 +9,5 @@
 mod service;
 
 pub use service::{AttachmentStorageService, RawStorageService};
+#[cfg(any(test, feature = "test-support"))]
+pub use service::{MockAttachmentStorageService, MockRawStorageService};
