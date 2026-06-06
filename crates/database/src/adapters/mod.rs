@@ -1,4 +1,5 @@
 pub(crate) mod account;
+pub(crate) mod folder;
 pub(crate) mod jobs;
 pub(crate) mod session;
 pub(crate) mod user;

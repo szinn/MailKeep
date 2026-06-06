@@ -3,6 +3,7 @@
 pub(crate) mod prelude;
 
 pub(crate) mod accounts;
+pub(crate) mod folders;
 pub(crate) mod jobs;
 pub(crate) mod sessions;
 pub(crate) mod user_settings;

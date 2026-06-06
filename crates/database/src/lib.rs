@@ -14,6 +14,7 @@ use mk_core::{
     Error,
     account::AccountRepository,
     auth::SessionRepository,
+    folder::FolderRepository,
     jobs::JobRepository,
     repository::{Repository, RepositoryService, RepositoryServiceBuilder},
     user::{UserRepository, UserSettingRepository},
@@ -33,8 +34,8 @@ mod transaction;
 
 use crate::{
     adapters::{
-        account::AccountRepositoryAdapter, jobs::JobRepositoryAdapter, session::SessionRepositoryAdapter, user::UserRepositoryAdapter,
-        user_settings::UserSettingRepositoryAdapter,
+        account::AccountRepositoryAdapter, folder::FolderRepositoryAdapter, jobs::JobRepositoryAdapter, session::SessionRepositoryAdapter,
+        user::UserRepositoryAdapter, user_settings::UserSettingRepositoryAdapter,
     },
     migrations::Migrator,
     repository::RepositoryImpl,
@@ -79,6 +80,7 @@ pub async fn create_repository_service(database: DatabaseConnection) -> Result<A
         .user_repository(Arc::new(UserRepositoryAdapter::new()) as Arc<dyn UserRepository>)
         .user_setting_repository(Arc::new(UserSettingRepositoryAdapter::new()) as Arc<dyn UserSettingRepository>)
         .job_repository(Arc::new(JobRepositoryAdapter::new()) as Arc<dyn JobRepository>)
+        .folder_repository(Arc::new(FolderRepositoryAdapter::new()) as Arc<dyn FolderRepository>)
         .build()
         .map_err(|e| Error::Infrastructure(e.to_string()))?;
 

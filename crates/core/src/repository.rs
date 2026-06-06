@@ -6,6 +6,7 @@ use crate::{
     Error,
     account::AccountRepository,
     auth::SessionRepository,
+    folder::FolderRepository,
     jobs::JobRepository,
     user::{UserRepository, UserSettingRepository},
 };
@@ -19,6 +20,7 @@ pub struct RepositoryService {
     user_repository: Arc<dyn UserRepository>,
     user_setting_repository: Arc<dyn UserSettingRepository>,
     job_repository: Arc<dyn JobRepository>,
+    folder_repository: Arc<dyn FolderRepository>,
 }
 
 impl RepositoryService {
@@ -56,6 +58,12 @@ impl RepositoryService {
     #[must_use]
     pub fn job_repository(&self) -> &Arc<dyn JobRepository> {
         &self.job_repository
+    }
+
+    /// Returns a reference to the folder repository.
+    #[must_use]
+    pub fn folder_repository(&self) -> &Arc<dyn FolderRepository> {
+        &self.folder_repository
     }
 }
 
@@ -187,6 +195,7 @@ pub(crate) mod testing {
         Error,
         account::repository::MockAccountRepository,
         auth::repository::MockSessionRepository,
+        folder::repository::MockFolderRepository,
         jobs::repository::MockJobRepository,
         user::repository::{user::MockUserRepository, user_settings::MockUserSettingRepository},
     };
@@ -231,5 +240,6 @@ pub(crate) mod testing {
             .user_repository(Arc::new(MockUserRepository::new()))
             .user_setting_repository(Arc::new(MockUserSettingRepository::new()))
             .job_repository(Arc::new(MockJobRepository::new()))
+            .folder_repository(Arc::new(MockFolderRepository::new()))
     }
 }
