@@ -16,6 +16,7 @@ use mk_core::{
     auth::SessionRepository,
     folder::FolderRepository,
     jobs::JobRepository,
+    message::{MessageAttachmentRepository, MessageLocationRepository, MessageRepository},
     repository::{Repository, RepositoryService, RepositoryServiceBuilder},
     user::{UserRepository, UserSettingRepository},
 };
@@ -34,7 +35,8 @@ mod transaction;
 
 use crate::{
     adapters::{
-        account::AccountRepositoryAdapter, folder::FolderRepositoryAdapter, jobs::JobRepositoryAdapter, session::SessionRepositoryAdapter,
+        account::AccountRepositoryAdapter, folder::FolderRepositoryAdapter, jobs::JobRepositoryAdapter, message::MessageRepositoryAdapter,
+        message_attachment::MessageAttachmentRepositoryAdapter, message_location::MessageLocationRepositoryAdapter, session::SessionRepositoryAdapter,
         user::UserRepositoryAdapter, user_settings::UserSettingRepositoryAdapter,
     },
     migrations::Migrator,
@@ -81,6 +83,9 @@ pub async fn create_repository_service(database: DatabaseConnection) -> Result<A
         .user_setting_repository(Arc::new(UserSettingRepositoryAdapter::new()) as Arc<dyn UserSettingRepository>)
         .job_repository(Arc::new(JobRepositoryAdapter::new()) as Arc<dyn JobRepository>)
         .folder_repository(Arc::new(FolderRepositoryAdapter::new()) as Arc<dyn FolderRepository>)
+        .message_repository(Arc::new(MessageRepositoryAdapter::new()) as Arc<dyn MessageRepository>)
+        .message_location_repository(Arc::new(MessageLocationRepositoryAdapter::new()) as Arc<dyn MessageLocationRepository>)
+        .message_attachment_repository(Arc::new(MessageAttachmentRepositoryAdapter::new()) as Arc<dyn MessageAttachmentRepository>)
         .build()
         .map_err(|e| Error::Infrastructure(e.to_string()))?;
 

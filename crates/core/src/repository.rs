@@ -8,6 +8,7 @@ use crate::{
     auth::SessionRepository,
     folder::FolderRepository,
     jobs::JobRepository,
+    message::{MessageAttachmentRepository, MessageLocationRepository, MessageRepository},
     user::{UserRepository, UserSettingRepository},
 };
 
@@ -21,6 +22,9 @@ pub struct RepositoryService {
     user_setting_repository: Arc<dyn UserSettingRepository>,
     job_repository: Arc<dyn JobRepository>,
     folder_repository: Arc<dyn FolderRepository>,
+    message_repository: Arc<dyn MessageRepository>,
+    message_location_repository: Arc<dyn MessageLocationRepository>,
+    message_attachment_repository: Arc<dyn MessageAttachmentRepository>,
 }
 
 impl RepositoryService {
@@ -64,6 +68,24 @@ impl RepositoryService {
     #[must_use]
     pub fn folder_repository(&self) -> &Arc<dyn FolderRepository> {
         &self.folder_repository
+    }
+
+    /// Returns a reference to the message repository.
+    #[must_use]
+    pub fn message_repository(&self) -> &Arc<dyn MessageRepository> {
+        &self.message_repository
+    }
+
+    /// Returns a reference to the message location repository.
+    #[must_use]
+    pub fn message_location_repository(&self) -> &Arc<dyn MessageLocationRepository> {
+        &self.message_location_repository
+    }
+
+    /// Returns a reference to the message attachment repository.
+    #[must_use]
+    pub fn message_attachment_repository(&self) -> &Arc<dyn MessageAttachmentRepository> {
+        &self.message_attachment_repository
     }
 }
 
@@ -197,6 +219,7 @@ pub(crate) mod testing {
         auth::repository::MockSessionRepository,
         folder::repository::MockFolderRepository,
         jobs::repository::MockJobRepository,
+        message::repository::{MockMessageAttachmentRepository, MockMessageLocationRepository, MockMessageRepository},
         user::repository::{user::MockUserRepository, user_settings::MockUserSettingRepository},
     };
 
@@ -241,5 +264,8 @@ pub(crate) mod testing {
             .user_setting_repository(Arc::new(MockUserSettingRepository::new()))
             .job_repository(Arc::new(MockJobRepository::new()))
             .folder_repository(Arc::new(MockFolderRepository::new()))
+            .message_repository(Arc::new(MockMessageRepository::new()))
+            .message_location_repository(Arc::new(MockMessageLocationRepository::new()))
+            .message_attachment_repository(Arc::new(MockMessageAttachmentRepository::new()))
     }
 }

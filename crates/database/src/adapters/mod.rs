@@ -1,6 +1,9 @@
 pub(crate) mod account;
 pub(crate) mod folder;
 pub(crate) mod jobs;
+pub(crate) mod message;
+pub(crate) mod message_attachment;
+pub(crate) mod message_location;
 pub(crate) mod session;
 pub(crate) mod user;
 pub(crate) mod user_settings;

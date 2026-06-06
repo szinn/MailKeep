@@ -28,6 +28,24 @@ impl ContentHash {
         s
     }
 
+    /// Parse a 64-character lowercase hex string back into a `ContentHash`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::Validation` if the string is not exactly 64 hex chars.
+    pub fn from_hex(s: impl AsRef<str>) -> Result<Self, crate::Error> {
+        let s = s.as_ref();
+        if s.len() != 64 {
+            return Err(crate::Error::Validation(format!("ContentHash hex must be 64 chars, got {}", s.len())));
+        }
+        let mut out = [0u8; 32];
+        for (i, byte_pair) in s.as_bytes().chunks_exact(2).enumerate() {
+            let hex = std::str::from_utf8(byte_pair).map_err(|e| crate::Error::Validation(e.to_string()))?;
+            out[i] = u8::from_str_radix(hex, 16).map_err(|e| crate::Error::Validation(e.to_string()))?;
+        }
+        Ok(Self(out))
+    }
+
     /// Two-level shard directory components from the first 4 hex chars.
     /// E.g., hash `2cf24...` → ("2c", "f2").
     #[must_use]
@@ -92,5 +110,26 @@ mod tests {
         let a = ContentHash::compute(b"one");
         let b = ContentHash::compute(b"two");
         assert_ne!(a, b);
+    }
+
+    #[test]
+    fn from_hex_round_trip() {
+        let original = ContentHash::compute(b"hello");
+        let parsed = ContentHash::from_hex(original.as_hex()).unwrap();
+        assert_eq!(parsed, original);
+    }
+
+    #[test]
+    fn from_hex_rejects_wrong_length() {
+        assert!(ContentHash::from_hex("").is_err());
+        assert!(ContentHash::from_hex("abc").is_err());
+        assert!(ContentHash::from_hex("a".repeat(63)).is_err());
+        assert!(ContentHash::from_hex("a".repeat(65)).is_err());
+    }
+
+    #[test]
+    fn from_hex_rejects_non_hex_chars() {
+        let bad = "z".repeat(64);
+        assert!(ContentHash::from_hex(bad).is_err());
     }
 }
