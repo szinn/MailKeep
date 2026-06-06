@@ -57,7 +57,7 @@ pub struct Message {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RecordedMessage {
     pub message_id: MessageId,
     pub created: bool,

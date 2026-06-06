@@ -32,6 +32,7 @@ tokio-graceful-shutdown.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+insta = { workspace = true, features = ["yaml"] }
 mockall = { workspace = true }
 tokio = { workspace = true }
 
