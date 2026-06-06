@@ -3294,6 +3294,7 @@ dependencies = [
  "mk-core",
  "mk-database",
  "sea-orm",
+ "secrecy",
  "serde",
  "serde_json",
  "tokio",
