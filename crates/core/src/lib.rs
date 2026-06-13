@@ -4,6 +4,7 @@ pub mod crypto;
 pub mod error;
 pub mod folder;
 pub mod imap;
+pub mod ingest;
 pub mod jobs;
 pub mod message;
 pub mod repository;
@@ -22,6 +23,7 @@ use crate::{
     auth::{AuthService, AuthServiceImpl},
     crypto::CipherService,
     folder::{FolderService, FolderServiceImpl},
+    ingest::{IngestService, create_ingest_service},
     jobs::{JobService, create_job_service, create_job_worker_subsystem},
     message::{MessageService, MessageServiceImpl},
     repository::RepositoryService,
@@ -53,6 +55,7 @@ pub struct CoreServices {
     pub user_setting_service: Arc<dyn UserSettingService>,
     pub folder_service: Arc<dyn FolderService>,
     pub message_service: Arc<dyn MessageService>,
+    pub ingest_service: Arc<dyn IngestService>,
     pub cipher_service: Arc<dyn CipherService>,
     pub raw_storage_service: Arc<dyn RawStorageService>,
     pub attachment_storage_service: Arc<dyn AttachmentStorageService>,
@@ -86,6 +89,7 @@ impl CoreServices {
             user_setting_service: Arc::new(UserSettingServiceImpl::new(repository_service.clone())),
             folder_service: Arc::new(FolderServiceImpl::new(repository_service.clone())),
             message_service: Arc::new(MessageServiceImpl::new(repository_service.clone())),
+            ingest_service: create_ingest_service(raw_storage_service.clone(), job_service.clone()),
             cipher_service,
             raw_storage_service,
             attachment_storage_service,

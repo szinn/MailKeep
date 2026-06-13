@@ -17,6 +17,7 @@ mockall = { workspace = true, optional = true }
 mk-utils.workspace = true
 
 argon2.workspace = true
+bytes.workspace = true
 async-trait.workspace = true
 chacha20poly1305.workspace = true
 chrono.workspace = true
