@@ -1,5 +1,6 @@
 use std::fmt::Write as _;
 
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use sha2::{Digest, Sha256};
 
 /// SHA-256 of the plaintext content. Used as the storage key.
@@ -63,6 +64,19 @@ impl ContentHash {
 impl std::fmt::Display for ContentHash {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.as_hex())
+    }
+}
+
+impl Serialize for ContentHash {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.as_hex())
+    }
+}
+
+impl<'de> Deserialize<'de> for ContentHash {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        Self::from_hex(&s).map_err(|e| de::Error::custom(e.to_string()))
     }
 }
 
@@ -131,5 +145,26 @@ mod tests {
     fn from_hex_rejects_non_hex_chars() {
         let bad = "z".repeat(64);
         assert!(ContentHash::from_hex(bad).is_err());
+    }
+
+    #[test]
+    fn serializes_to_hex_string() {
+        let hash = ContentHash::compute(b"hello");
+        let json = serde_json::to_string(&hash).unwrap();
+        assert_eq!(json, "\"2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824\"");
+    }
+
+    #[test]
+    fn serde_round_trip() {
+        let hash = ContentHash::compute(b"round trip");
+        let json = serde_json::to_string(&hash).unwrap();
+        let back: ContentHash = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, hash);
+    }
+
+    #[test]
+    fn deserialize_rejects_bad_hex() {
+        assert!(serde_json::from_str::<ContentHash>("\"nothex\"").is_err());
+        assert!(serde_json::from_str::<ContentHash>("\"abc\"").is_err());
     }
 }
