@@ -22,13 +22,17 @@ sqlite = []
 [dependencies]
 mk-core = { workspace = true, features = ["test-support"] }
 mk-database.workspace = true
+mk-parser.workspace = true
+mk-storage.workspace = true
 
 async-trait.workspace = true
+bytes.workspace = true
 chrono.workspace = true
 sea-orm.workspace = true
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+tempfile.workspace = true
 tokio.workspace = true
 tokio-graceful-shutdown.workspace = true
 

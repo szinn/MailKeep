@@ -1,0 +1,21 @@
+Message-ID: <dedup-a@mailkeep.test>
+From: Alice <alice@example.com>
+To: Bob <bob@example.com>
+Subject: Dedup test message A
+Date: Tue, 13 Jun 2026 10:01:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="boundary-dedup-a"
+
+--boundary-dedup-a
+Content-Type: text/plain; charset="utf-8"
+
+This is message A with the shared attachment.
+
+--boundary-dedup-a
+Content-Type: text/plain; name="shared.txt"
+Content-Disposition: attachment; filename="shared.txt"
+Content-Transfer-Encoding: base64
+
+SGVsbG8sIGF0dGFjaG1lbnQh
+
+--boundary-dedup-a--

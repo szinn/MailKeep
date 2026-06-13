@@ -3302,13 +3302,17 @@ name = "integration-tests"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "bytes",
  "chrono",
  "mk-core",
  "mk-database",
+ "mk-parser",
+ "mk-storage",
  "sea-orm",
  "secrecy",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "tokio-graceful-shutdown",
 ]
@@ -3690,6 +3694,7 @@ dependencies = [
  "mk-core",
  "mk-database",
  "mk-frontend",
+ "mk-parser",
  "mk-storage",
  "serde",
  "thiserror 2.0.18",

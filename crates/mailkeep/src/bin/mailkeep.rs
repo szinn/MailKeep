@@ -67,6 +67,8 @@ async fn cmd_server(config: mailkeep::config::Config) -> anyhow::Result<()> {
         .context("ExternalServices missing required field")?;
     let core_services = create_services(external).context("Couldn't create core services")?;
 
+    mk_parser::register_handlers(&core_services);
+
     let oidc_config = if config.oidc.is_set() { Some(config.oidc.clone()) } else { None };
     let frontend_subsystem = create_frontend_subsystem(&config.frontend, oidc_config, core_services.clone());
 

@@ -9,6 +9,9 @@ mod jobs;
 #[cfg(feature = "sqlite")]
 mod folder_message;
 
+#[cfg(feature = "sqlite")]
+mod ingest;
+
 pub(crate) use sqlite::setup;
 
 #[tokio::test]

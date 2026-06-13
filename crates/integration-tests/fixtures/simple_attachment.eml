@@ -1,0 +1,21 @@
+Message-ID: <simple-attachment@mailkeep.test>
+From: Alice <alice@example.com>
+To: Bob <bob@example.com>
+Subject: Simple attachment test
+Date: Tue, 13 Jun 2026 10:00:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="boundary-simple"
+
+--boundary-simple
+Content-Type: text/plain; charset="utf-8"
+
+This is the body text of the simple attachment test message.
+
+--boundary-simple
+Content-Type: text/plain; name="hello.txt"
+Content-Disposition: attachment; filename="hello.txt"
+Content-Transfer-Encoding: base64
+
+SGVsbG8sIGF0dGFjaG1lbnQh
+
+--boundary-simple--

@@ -1,0 +1,8 @@
+Message-ID: <no-from@mailkeep.test>
+To: Bob <bob@example.com>
+Subject: No from header test
+Date: Tue, 13 Jun 2026 10:00:00 +0000
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+This message has no From header. The sentinel should be used.
