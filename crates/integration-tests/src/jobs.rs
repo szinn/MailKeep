@@ -429,18 +429,16 @@ async fn test_crash_recovery_on_startup() {
     };
 
     // Claim it without completing — leaves it Running, simulating crashed worker.
-    {
-        let job_repo = ctx.repos.job_repository().clone();
-        let claimed = transaction(&**ctx.repos.repository(), |tx| {
-            let job_repo = job_repo.clone();
-            Box::pin(async move { job_repo.claim_next(tx).await })
-        })
-        .await
-        .unwrap()
-        .expect("a job was enqueued");
-        assert_eq!(claimed.id, job_id);
-        // No complete/fail — drop here simulating crash.
-    }
+    // No complete/fail afterwards — the claimed job is simply left Running.
+    let job_repo = ctx.repos.job_repository().clone();
+    let claimed = transaction(&**ctx.repos.repository(), |tx| {
+        let job_repo = job_repo.clone();
+        Box::pin(async move { job_repo.claim_next(tx).await })
+    })
+    .await
+    .unwrap()
+    .expect("a job was enqueued");
+    assert_eq!(claimed.id, job_id);
 
     // Start the subsystem. crash-recovery `reset_running_to_pending` should
     // flip the abandoned row back to Pending, then the worker claims and

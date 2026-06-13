@@ -21,7 +21,7 @@ impl From<accounts::Model> for Account {
         let token = AccountToken::new(model.id as u64);
         let email_address = EmailAddress::new(model.email_address).expect("database email_address should be valid");
         let server: ImapServerConfig = serde_json::from_str(&model.server).expect("database server JSON should be valid");
-        let status = AccountStatus::from_str(&model.status).expect("database status string should match AccountStatus variant");
+        let status = AccountStatus::from_db_str(&model.status).expect("database status string should match AccountStatus variant");
 
         Self {
             id: model.id as u64,

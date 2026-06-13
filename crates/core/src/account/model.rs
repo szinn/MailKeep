@@ -30,7 +30,7 @@ impl AccountStatus {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_db_str(s: &str) -> Option<Self> {
         match s {
             "PendingFirstSync" => Some(Self::PendingFirstSync),
             "Syncing" => Some(Self::Syncing),
@@ -166,9 +166,9 @@ mod tests {
             AccountStatus::Error,
             AccountStatus::Disabled,
         ] {
-            assert_eq!(AccountStatus::from_str(s.as_str()), Some(s));
+            assert_eq!(AccountStatus::from_db_str(s.as_str()), Some(s));
         }
-        assert!(AccountStatus::from_str("Bogus").is_none());
+        assert!(AccountStatus::from_db_str("Bogus").is_none());
     }
 
     #[test]

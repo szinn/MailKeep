@@ -387,8 +387,7 @@ mod tests {
         let first = svc.job_repository().claim_next(&*tx).await.unwrap().unwrap();
         assert_eq!(
             first.id, user.id,
-            "PRIORITY_USER ({}) job should be claimed before PRIORITY_NORMAL ({})",
-            PRIORITY_USER, PRIORITY_NORMAL
+            "PRIORITY_USER ({PRIORITY_USER}) job should be claimed before PRIORITY_NORMAL ({PRIORITY_NORMAL})"
         );
 
         let second = svc.job_repository().claim_next(&*tx).await.unwrap().unwrap();

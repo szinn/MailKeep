@@ -186,6 +186,7 @@ literal_string_with_formatting_args = "allow"       # Conflicts with structured 
 multiple_crate_versions = "allow"                   # Dependency resolution — not always in our control
 suspicious_else_formatting = "allow"                # Dioxus RSX `class: if cond { ... } else { ... }` is idiomatic
 unused_async = "allow"                              # Required for Dioxus endpoints
+unused_async_trait_impl = "allow"                   # False-positives on SeaORM DeriveModelEx output and trait-required async (e.g. JobHandler::handle) with trivial bodies
 unused_trait_names = "allow"
 missing_panics_doc = "allow"
 struct_excessive_bools = "allow"

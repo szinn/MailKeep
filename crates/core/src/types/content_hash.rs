@@ -135,16 +135,16 @@ mod tests {
 
     #[test]
     fn from_hex_rejects_wrong_length() {
-        assert!(ContentHash::from_hex("").is_err());
-        assert!(ContentHash::from_hex("abc").is_err());
-        assert!(ContentHash::from_hex("a".repeat(63)).is_err());
-        assert!(ContentHash::from_hex("a".repeat(65)).is_err());
+        ContentHash::from_hex("").unwrap_err();
+        ContentHash::from_hex("abc").unwrap_err();
+        ContentHash::from_hex("a".repeat(63)).unwrap_err();
+        ContentHash::from_hex("a".repeat(65)).unwrap_err();
     }
 
     #[test]
     fn from_hex_rejects_non_hex_chars() {
         let bad = "z".repeat(64);
-        assert!(ContentHash::from_hex(bad).is_err());
+        ContentHash::from_hex(bad).unwrap_err();
     }
 
     #[test]
@@ -164,7 +164,7 @@ mod tests {
 
     #[test]
     fn deserialize_rejects_bad_hex() {
-        assert!(serde_json::from_str::<ContentHash>("\"nothex\"").is_err());
-        assert!(serde_json::from_str::<ContentHash>("\"abc\"").is_err());
+        serde_json::from_str::<ContentHash>("\"nothex\"").unwrap_err();
+        serde_json::from_str::<ContentHash>("\"abc\"").unwrap_err();
     }
 }
