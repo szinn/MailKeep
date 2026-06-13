@@ -1,0 +1,20 @@
+Message-ID: <alt001@example.com>
+From: Alice Example <alice@example.com>
+To: Bob <bob@example.com>
+Subject: Multipart alternative test
+Date: Tue, 01 Nov 2022 10:00:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="alt_boundary"
+
+--alt_boundary
+Content-Type: text/plain; charset=UTF-8
+
+This is the plain text part of the email.
+It should be preferred for the snippet.
+
+--alt_boundary
+Content-Type: text/html; charset=UTF-8
+
+<html><body><p>This is the <b>HTML</b> part of the email.</p></body></html>
+
+--alt_boundary--

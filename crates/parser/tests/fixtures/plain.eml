@@ -1,0 +1,10 @@
+Message-ID: <plain001@example.com>
+From: Alice Example <alice@example.com>
+To: Bob <bob@example.com>
+Subject: Plain text test
+Date: Tue, 01 Nov 2022 10:00:00 +0000
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+
+This is a plain text email body.
+It has multiple lines of text.

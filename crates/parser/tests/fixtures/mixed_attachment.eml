@@ -1,0 +1,21 @@
+Message-ID: <mixed001@example.com>
+From: Alice Example <alice@example.com>
+To: Bob <bob@example.com>
+Subject: Mixed with attachment
+Date: Tue, 01 Nov 2022 10:00:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="mixed_boundary"
+
+--mixed_boundary
+Content-Type: text/plain; charset=UTF-8
+
+This email has an attachment.
+
+--mixed_boundary
+Content-Type: text/plain; name="hello.txt"
+Content-Disposition: attachment; filename="hello.txt"
+Content-Transfer-Encoding: base64
+
+SGVsbG8sIFdvcmxkIQ==
+
+--mixed_boundary--

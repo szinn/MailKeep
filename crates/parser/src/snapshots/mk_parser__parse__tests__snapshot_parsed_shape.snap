@@ -1,0 +1,11 @@
+---
+source: crates/parser/src/parse.rs
+expression: view
+---
+message_id: <mixed001@example.com>
+subject: Some("Mixed with attachment")
+from: alice@example.com (Some("Alice Example"))
+to: ["bob@example.com"]
+snippet: This email has an attachment.
+size_bytes: 525
+attachments: [(Some("hello.txt"), "text/plain", false)]

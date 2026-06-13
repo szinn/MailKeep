@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/mailkeep", "crates/integration-tests"]
+members = ["crates/mailkeep", "crates/integration-tests", "crates/parser"]
 
 [workspace.package]
 version = "0.1.0"
@@ -17,6 +17,7 @@ license = "MIT"
 mk-core = { path = "crates/core" }
 mk-database = { path = "crates/database" }
 mk-frontend = { path = "crates/frontend" }
+mk-parser = { path = "crates/parser" }
 mk-storage = { path = "crates/storage" }
 mk-utils = { path = "crates/utils" }
 
@@ -36,6 +37,7 @@ secrecy = "0.10.3"
 sha2 = "0.11.0"
 
 bytes = "1.10"
+mail-parser = "0.11.3"
 
 # Memory management
 mimalloc = "0.1.52"
@@ -225,6 +227,8 @@ opt-level = 1
 [profile.dev.package.mk-storage]
 opt-level = 1
 [profile.dev.package.mk-utils]
+opt-level = 1
+[profile.dev.package.mk-parser]
 opt-level = 1
 [profile.dev.package.mailkeep]
 opt-level = 1

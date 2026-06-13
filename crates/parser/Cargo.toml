@@ -1,0 +1,24 @@
+[package]
+name = "mk-parser"
+description = "MailKeep message parser adapter (mail-parser)"
+
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+mk-core.workspace = true
+
+async-trait.workspace = true
+chrono.workspace = true
+mail-parser.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+tokio = { workspace = true }
+
+[lints]
+workspace = true
