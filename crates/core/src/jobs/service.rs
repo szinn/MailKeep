@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use crate::{
     Error,
-    jobs::{Enqueueable, handler::ErasedJobHandler},
+    jobs::{Enqueueable, JobId, handler::ErasedJobHandler},
     repository::{RepositoryService, read_only_transaction, transaction},
 };
 
@@ -26,12 +26,12 @@ pub trait JobService: Send + Sync {
     /// Enqueue a raw job by type string and pre-serialised JSON payload.
     ///
     /// Prefer [`JobServiceExt::enqueue`] for typed payloads.
-    async fn enqueue_raw(&self, job_type: &str, payload: serde_json::Value, priority: i16) -> Result<(), Error>;
+    async fn enqueue_raw(&self, job_type: &str, payload: serde_json::Value, priority: i16) -> Result<JobId, Error>;
 
     /// Enqueue a raw job that won't be picked up until `now + delay`.
     ///
     /// Prefer [`JobServiceExt::enqueue_after`] for typed payloads.
-    async fn enqueue_raw_delayed(&self, job_type: &str, payload: serde_json::Value, priority: i16, delay: chrono::Duration) -> Result<(), Error>;
+    async fn enqueue_raw_delayed(&self, job_type: &str, payload: serde_json::Value, priority: i16, delay: chrono::Duration) -> Result<JobId, Error>;
 
     /// Count jobs of the given type that are currently pending or running.
     async fn count_pending_by_type(&self, job_type: &str) -> Result<u64, Error>;
@@ -57,7 +57,7 @@ pub trait JobService: Send + Sync {
 /// Blanket-implemented for all `JobService` impls — no manual work per job
 /// type. Mirrors the [`JobRepositoryExt`] pattern but at the service layer.
 pub trait JobServiceExt: JobService {
-    fn enqueue<P: Enqueueable + Serialize + Send + Sync>(&self, payload: &P) -> impl std::future::Future<Output = Result<(), Error>> + Send {
+    fn enqueue<P: Enqueueable + Serialize + Send + Sync>(&self, payload: &P) -> impl std::future::Future<Output = Result<JobId, Error>> + Send {
         let value = serde_json::to_value(payload);
         async move {
             let value = value.map_err(|e| Error::Infrastructure(format!("failed to serialize job payload: {e}")))?;
@@ -70,7 +70,7 @@ pub trait JobServiceExt: JobService {
         &self,
         payload: &P,
         delay: chrono::Duration,
-    ) -> impl std::future::Future<Output = Result<(), Error>> + Send {
+    ) -> impl std::future::Future<Output = Result<JobId, Error>> + Send {
         let value = serde_json::to_value(payload);
         async move {
             let value = value.map_err(|e| Error::Infrastructure(format!("failed to serialize job payload: {e}")))?;
@@ -112,38 +112,32 @@ impl JobServiceImpl {
 
 #[async_trait::async_trait]
 impl JobService for JobServiceImpl {
-    async fn enqueue_raw(&self, job_type: &str, payload: serde_json::Value, priority: i16) -> Result<(), Error> {
+    async fn enqueue_raw(&self, job_type: &str, payload: serde_json::Value, priority: i16) -> Result<JobId, Error> {
         let job_type = job_type.to_owned();
         let job_repo = self.repository_service.job_repository().clone();
-        transaction(&**self.repository_service.repository(), |tx| {
+        let job = transaction(&**self.repository_service.repository(), |tx| {
             let job_repo = job_repo.clone();
             let job_type = job_type.clone();
             let payload = payload.clone();
-            Box::pin(async move {
-                job_repo.enqueue_raw(tx, &job_type, payload, priority).await?;
-                Ok(())
-            })
+            Box::pin(async move { job_repo.enqueue_raw(tx, &job_type, payload, priority).await })
         })
         .await?;
         self.notify.notify_waiters();
-        Ok(())
+        Ok(job.id)
     }
 
-    async fn enqueue_raw_delayed(&self, job_type: &str, payload: serde_json::Value, priority: i16, delay: chrono::Duration) -> Result<(), Error> {
+    async fn enqueue_raw_delayed(&self, job_type: &str, payload: serde_json::Value, priority: i16, delay: chrono::Duration) -> Result<JobId, Error> {
         let job_type = job_type.to_owned();
         let job_repo = self.repository_service.job_repository().clone();
-        transaction(&**self.repository_service.repository(), |tx| {
+        let job = transaction(&**self.repository_service.repository(), |tx| {
             let job_repo = job_repo.clone();
             let job_type = job_type.clone();
             let payload = payload.clone();
-            Box::pin(async move {
-                job_repo.enqueue_delayed(tx, &job_type, payload, priority, delay).await?;
-                Ok(())
-            })
+            Box::pin(async move { job_repo.enqueue_delayed(tx, &job_type, payload, priority, delay).await })
         })
         .await?;
         self.notify.notify_waiters();
-        Ok(())
+        Ok(job.id)
     }
 
     async fn count_pending_by_type(&self, job_type: &str) -> Result<u64, Error> {
@@ -300,7 +294,8 @@ mod tests {
         });
 
         let svc = create_service(mock);
-        svc.enqueue_raw("test.job", serde_json::json!({"k": "v"}), PRIORITY_NORMAL).await.unwrap();
+        let job_id = svc.enqueue_raw("test.job", serde_json::json!({"k": "v"}), PRIORITY_NORMAL).await.unwrap();
+        assert_eq!(job_id, 1, "enqueue_raw must return the inserted job's id");
     }
 
     #[tokio::test]
@@ -333,9 +328,11 @@ mod tests {
         });
 
         let svc = create_service(mock);
-        svc.enqueue_raw_delayed("test.job", serde_json::json!({}), PRIORITY_NORMAL, Duration::minutes(5))
+        let job_id = svc
+            .enqueue_raw_delayed("test.job", serde_json::json!({}), PRIORITY_NORMAL, Duration::minutes(5))
             .await
             .unwrap();
+        assert_eq!(job_id, 1, "enqueue_raw_delayed must return the inserted job's id");
     }
 
     #[tokio::test]
