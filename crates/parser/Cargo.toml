@@ -11,14 +11,16 @@ repository = { workspace = true }
 [dependencies]
 mk-core.workspace = true
 
-async-trait.workspace = true
 chrono.workspace = true
 mail-parser.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+async-trait.workspace = true
 insta.workspace = true
 tokio = { workspace = true }
+mk-core = { workspace = true, features = ["test-support"] }
+chrono.workspace = true
 
 [lints]
 workspace = true
