@@ -33,6 +33,11 @@ pub trait JobRepository: Send + Sync {
     /// Otherwise sets status to failed and preserves the error message.
     async fn fail(&self, transaction: &dyn Transaction, job: Job, error: String) -> Result<Job, Error>;
 
+    /// Mark a job as permanently failed without rescheduling, regardless of
+    /// remaining attempts. Used for deterministic (non-transient) handler
+    /// failures where a retry would fail identically.
+    async fn fail_terminal(&self, transaction: &dyn Transaction, job: Job, error: String) -> Result<Job, Error>;
+
     /// Reset any jobs left in `running` state back to `pending`. Called on
     /// startup to recover from a previous crash. Returns the number of jobs
     /// reset.

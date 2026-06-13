@@ -4,7 +4,7 @@ use std::{
 };
 
 use mk_core::{
-    Error, create_core_subsystem,
+    Error, RepositoryError, create_core_subsystem,
     jobs::{Enqueueable, JobHandler, JobServiceExt, PRIORITY_NORMAL},
     repository::transaction,
 };
@@ -305,6 +305,99 @@ async fn test_wake_mid_poll() {
         elapsed.as_millis()
     );
     assert_eq!(*observed.lock().unwrap(), vec![99]);
+
+    toplevel_handle.abort();
+    let _ = toplevel_handle.await;
+}
+
+// ─── Helpers for terminal/transient tests ─────────────────────────────────
+
+struct FailingHandler {
+    transient: bool,
+}
+impl JobHandler for FailingHandler {
+    const JOB_TYPE: &'static str = "integration.test";
+    const DISPLAY_NAME: &'static str = "Failing Handler (integration test)";
+    type Payload = TestPayload;
+    async fn handle(&self, _payload: TestPayload) -> Result<(), Error> {
+        if self.transient {
+            Err(Error::RepositoryError(RepositoryError::Connection("simulated".into())))
+        } else {
+            Err(Error::Validation("permanently bad message".into()))
+        }
+    }
+}
+
+async fn count_pending(ctx: &crate::context::TestContext) -> u64 {
+    let repo = ctx.repos.repository().clone();
+    let job_repo = ctx.repos.job_repository().clone();
+    transaction(&*repo, |tx| {
+        let r = job_repo.clone();
+        Box::pin(async move { r.count_all_pending(tx).await })
+    })
+    .await
+    .unwrap()
+}
+
+// ─── Test: terminal error fails job without retry ──────────────────────────
+
+#[tokio::test]
+async fn test_terminal_error_fails_without_retry() {
+    let ctx = setup().await;
+    ctx.services.job_service.register(FailingHandler { transient: false });
+
+    let core = ctx.services.clone();
+    let toplevel_handle = tokio::spawn(async move {
+        Toplevel::new(async move |s: &mut SubsystemHandle| {
+            s.start(SubsystemBuilder::new("Core", create_core_subsystem(&core).into_subsystem()));
+        })
+        .handle_shutdown_requests(Duration::from_secs(5))
+        .await
+    });
+
+    ctx.services.job_service.enqueue(&TestPayload { value: 1 }).await.unwrap();
+
+    // Terminal failure: the job is marked Failed and never re-queued.
+    // Poll until pending count reaches 0 (job moved to Failed).
+    let settled = {
+        let mut ok = false;
+        for _ in 0..20 {
+            if count_pending(&ctx).await == 0 {
+                ok = true;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        ok
+    };
+    assert!(settled, "terminal-failed job must not remain pending/running");
+
+    toplevel_handle.abort();
+    let _ = toplevel_handle.await;
+}
+
+// ─── Test: transient error reschedules job ─────────────────────────────────
+
+#[tokio::test]
+async fn test_transient_error_reschedules() {
+    let ctx = setup().await;
+    ctx.services.job_service.register(FailingHandler { transient: true });
+
+    let core = ctx.services.clone();
+    let toplevel_handle = tokio::spawn(async move {
+        Toplevel::new(async move |s: &mut SubsystemHandle| {
+            s.start(SubsystemBuilder::new("Core", create_core_subsystem(&core).into_subsystem()));
+        })
+        .handle_shutdown_requests(Duration::from_secs(5))
+        .await
+    });
+
+    ctx.services.job_service.enqueue(&TestPayload { value: 2 }).await.unwrap();
+
+    // Transient failure reschedules with backoff (≥60s), so the job stays
+    // pending (count == 1) and is not immediately re-claimed.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(count_pending(&ctx).await, 1, "transient-failed job should be rescheduled (still pending)");
 
     toplevel_handle.abort();
     let _ = toplevel_handle.await;

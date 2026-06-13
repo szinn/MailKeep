@@ -121,11 +121,20 @@ impl IntoSubsystem<Error> for JobWorker {
                     }
                 }
                 Err(e) => {
-                    tracing::error!(job_type, error = %e, "job handler failed");
+                    let terminal = !e.is_transient();
+                    tracing::error!(job_type, error = %e, terminal, "job handler failed");
+                    let msg = e.to_string();
                     let job_repo = job_repo.clone();
                     match transaction(&*repository, |tx| {
                         let job = job.clone();
-                        Box::pin(async move { job_repo.fail(tx, job, e.to_string()).await })
+                        let msg = msg.clone();
+                        Box::pin(async move {
+                            if terminal {
+                                job_repo.fail_terminal(tx, job, msg).await
+                            } else {
+                                job_repo.fail(tx, job, msg).await
+                            }
+                        })
                     })
                     .await
                     {

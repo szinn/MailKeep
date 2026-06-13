@@ -200,6 +200,38 @@ impl JobRepository for JobRepositoryAdapter {
         Ok(updated.into())
     }
 
+    async fn fail_terminal(&self, transaction: &dyn Transaction, job: Job, error: String) -> Result<Job, Error> {
+        let db_tx = TransactionImpl::get_db_transaction(transaction)?;
+        let now = Utc::now();
+
+        let result = prelude::Jobs::update_many()
+            .col_expr(jobs::Column::Status, Expr::value(jobs::job_status_to_str(&JobStatus::Failed)))
+            .col_expr(jobs::Column::CompletedAt, Expr::value(now.fixed_offset()))
+            .col_expr(jobs::Column::ErrorMessage, Expr::value(error))
+            .col_expr(jobs::Column::Version, Expr::col(jobs::Column::Version).add(1))
+            .col_expr(jobs::Column::UpdatedAt, Expr::value(now.fixed_offset()))
+            .filter(jobs::Column::Id.eq(job.id))
+            .filter(jobs::Column::Version.eq(job.version))
+            .exec(db_tx)
+            .await
+            .map_err(handle_dberr)?;
+
+        if result.rows_affected != 1 {
+            return Err(Error::Infrastructure(format!(
+                "fail_terminal({}) affected {} rows — version conflict or row missing",
+                job.id, result.rows_affected
+            )));
+        }
+
+        let updated = prelude::Jobs::find_by_id(job.id)
+            .one(db_tx)
+            .await
+            .map_err(handle_dberr)?
+            .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
+
+        Ok(updated.into())
+    }
+
     async fn reset_running_to_pending(&self, transaction: &dyn Transaction) -> Result<u64, Error> {
         let db_tx = TransactionImpl::get_db_transaction(transaction)?;
         let now = Utc::now();
@@ -435,6 +467,29 @@ mod tests {
             "expected backoff in [55s, 65s] for attempt=1 (spec: 60s), got {}s",
             backoff.num_seconds()
         );
+    }
+
+    #[tokio::test]
+    async fn fail_terminal_marks_failed_even_with_attempts_remaining() {
+        let svc = setup().await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        svc.job_repository().enqueue_raw(&*tx, "test_job", serde_json::json!({}), 0).await.unwrap();
+        let claimed = svc.job_repository().claim_next(&*tx).await.unwrap().unwrap();
+
+        // attempt=1, max_attempts=3 — retries remain, but fail_terminal marks Failed
+        // anyway
+        assert!(claimed.attempt < claimed.max_attempts, "precondition: retries should remain");
+
+        let failed = svc
+            .job_repository()
+            .fail_terminal(&*tx, claimed, "deterministic parse failure".to_owned())
+            .await
+            .unwrap();
+
+        assert_eq!(failed.status, JobStatus::Failed);
+        assert_eq!(failed.error_message.as_deref(), Some("deterministic parse failure"));
+        assert!(failed.completed_at.is_some(), "fail_terminal must set completed_at");
     }
 
     #[tokio::test]
