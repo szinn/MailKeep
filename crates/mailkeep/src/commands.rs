@@ -47,6 +47,9 @@ pub struct ImapArgs {
     /// Connection security
     #[arg(long, value_enum, default_value_t = TlsArg::Implicit)]
     pub tls: TlsArg,
+    /// Print each raw IMAP LIST entry (folder name + attributes) to stderr
+    #[arg(short, long)]
+    pub verbose: bool,
 }
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]

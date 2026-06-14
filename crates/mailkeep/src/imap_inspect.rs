@@ -18,6 +18,18 @@ use crate::commands::{ImapArgs, TlsArg};
 /// Connect, authenticate (prompting for the password), and print the folder
 /// list.
 pub async fn run(args: ImapArgs) -> anyhow::Result<()> {
+    if args.verbose {
+        // Surface the adapter's `IMAP LIST entry` debug spans on stderr so the
+        // raw server-reported folders/attributes are visible (keeps stdout = the
+        // folder list). Ignore the error if a subscriber is already installed.
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::new("mk_imap=debug"))
+            .with_writer(std::io::stderr)
+            .with_target(false)
+            .without_time()
+            .try_init();
+    }
+
     let tls = match args.tls {
         TlsArg::Implicit => TlsMode::Tls,
         TlsArg::Starttls => TlsMode::StartTls,
@@ -59,16 +71,19 @@ pub async fn run(args: ImapArgs) -> anyhow::Result<()> {
 /// folder. The tag is the special-use flag (e.g. `\Inbox`), or `(noselect)` for
 /// container folders that hold no mail, or empty for an ordinary folder.
 fn format_folders(folders: &[RemoteFolder]) -> String {
+    use std::fmt::Write as _;
+
     let mut out = format!("{} folder{}:\n", folders.len(), if folders.len() == 1 { "" } else { "s" });
     let width = folders.iter().map(|f| f.path.chars().count()).max().unwrap_or(0);
     for folder in folders {
         let tag = folder
             .special_use
             .map_or_else(|| if folder.no_select { "(noselect)" } else { "" }, special_use_tag);
+        // Writing to a String is infallible.
         if tag.is_empty() {
-            out.push_str(&format!("  {}\n", folder.path));
+            let _ = writeln!(out, "  {}", folder.path);
         } else {
-            out.push_str(&format!("  {:<width$}  {tag}\n", folder.path));
+            let _ = writeln!(out, "  {:<width$}  {tag}", folder.path);
         }
     }
     out

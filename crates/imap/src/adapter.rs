@@ -110,6 +110,7 @@ impl ImapPort for ImapAdapter {
 
             while let Some(item) = stream.next().await {
                 let name = item.map_err(|e| Error::Infrastructure(format!("IMAP LIST item error: {e}")))?;
+                tracing::debug!(folder = name.name(), attributes = ?name.attributes(), "IMAP LIST entry");
                 out.push(remote_folder_from_name(&name));
             }
         }
