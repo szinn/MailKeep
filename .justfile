@@ -104,6 +104,7 @@ component-tests:
 [doc('Run all integration tests using nextest')]
 integration-tests:
     just sqlite-integration-tests
+    just imap-integration-tests
 
 [doc('Run SQLite integration tests')]
 sqlite-integration-tests:
