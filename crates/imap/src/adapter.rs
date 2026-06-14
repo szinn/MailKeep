@@ -32,9 +32,10 @@ impl ImapAdapter {
     }
 
     /// Test-only constructor that injects a custom rustls config (e.g. one that
-    /// trusts a self-signed greenmail cert). Gated so production builds cannot
-    /// accidentally weaken trust. Used by the Task 6 integration test.
-    #[cfg(feature = "greenmail-tests")]
+    /// trusts a self-signed greenmail cert). Gated behind `test-support` so
+    /// production builds cannot accidentally weaken trust. Used by the
+    /// greenmail integration tests in the integration-tests crate.
+    #[cfg(feature = "test-support")]
     #[must_use]
     pub fn with_tls_config(tls_config: Arc<ClientConfig>) -> Self {
         Self { tls_config }

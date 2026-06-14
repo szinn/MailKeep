@@ -9,8 +9,10 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [features]
-# Opt-in: runs tests that require a live greenmail container (see .justfile / Task 6).
-greenmail-tests = []
+# Exposes `ImapAdapter::with_tls_config`, a test-only constructor that injects a
+# custom rustls config (used by the greenmail integration tests in the
+# integration-tests crate). Not for production wiring.
+test-support = []
 
 [dependencies]
 mk-core.workspace = true

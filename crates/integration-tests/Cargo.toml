@@ -18,16 +18,21 @@ path = "src/main.rs"
 [features]
 default = ["sqlite"]
 sqlite = []
+# Adapter-vs-live-server tests for mk-imap. Requires a greenmail container; not
+# part of the default run. See src/greenmail.rs / `just imap-integration-tests`.
+greenmail = ["dep:mk-imap", "dep:rustls"]
 
 [dependencies]
 mk-core = { workspace = true, features = ["test-support"] }
 mk-database.workspace = true
+mk-imap = { workspace = true, optional = true, features = ["test-support"] }
 mk-parser.workspace = true
 mk-storage.workspace = true
 
 async-trait.workspace = true
 bytes.workspace = true
 chrono.workspace = true
+rustls = { workspace = true, optional = true }
 sea-orm.workspace = true
 secrecy.workspace = true
 serde.workspace = true

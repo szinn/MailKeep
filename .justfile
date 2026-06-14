@@ -109,9 +109,9 @@ integration-tests:
 sqlite-integration-tests:
     cargo nextest run --no-default-features --features sqlite --package integration-tests
 
-[doc('Run IMAP adapter integration tests (requires greenmail in colima — see crates/imap/tests/greenmail.rs)')]
+[doc('Run IMAP adapter integration tests (requires greenmail in colima — see crates/integration-tests/src/greenmail.rs)')]
 imap-integration-tests:
-    cargo nextest run -p mk-imap --features greenmail-tests --run-ignored all
+    cargo nextest run --package integration-tests --no-default-features --features greenmail --run-ignored all
 
 [doc('Serve documentation locally with live reload')]
 docs-serve:

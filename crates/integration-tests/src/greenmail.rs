@@ -1,4 +1,5 @@
-//! Integration tests against a live greenmail IMAP server (TLS).
+//! Integration tests for the `mk-imap` adapter against a live greenmail IMAP
+//! server (TLS).
 //!
 //! Requires a greenmail container reachable on localhost (IMAPS 3993). The
 //! `GREENMAIL_OPTS` user below must match `USERNAME`/`PASSWORD` in this file:
@@ -9,14 +10,11 @@
 //!   greenmail/standalone:2.1.0
 //! ```
 //!
-//! Gated behind the `greenmail-tests` feature so the default suites never
-//! compile or run it. Run with: `just imap-integration-tests`.
-//! These tests are additionally marked `#[ignore]`: the `greenmail-tests`
-//! feature is part of `--all-features`, so `just component-tests` *compiles*
-//! this file but must not *run* it (no server). `#[ignore]` makes nextest skip
-//! them by default; `just imap-integration-tests` opts back in with
-//! `--run-ignored all`.
-#![cfg(feature = "greenmail-tests")]
+//! This module is compiled only under the `greenmail` feature (see
+//! `main.rs`), so the default `sqlite` integration run never touches it. The
+//! tests are additionally `#[ignore]`d so an `--all-features` build (e.g.
+//! `just insta`) *compiles* but does not *run* them without a server. Run with:
+//! `just imap-integration-tests` (which adds `--run-ignored all`).
 
 use std::sync::Arc;
 
