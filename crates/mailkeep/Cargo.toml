@@ -31,6 +31,8 @@ server = [
     "dep:mk-imap",
     "dep:mk-parser",
     "dep:mk-storage",
+    "dep:rpassword",
+    "dep:secrecy",
     "dep:serde",
     "dep:thiserror",
     "dep:tokio",
@@ -55,6 +57,8 @@ mimalloc = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
 config = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
+rpassword = { workspace = true, optional = true }
+secrecy = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }

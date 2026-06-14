@@ -5,4 +5,6 @@ pub mod config;
 #[cfg(feature = "server")]
 pub mod error;
 #[cfg(feature = "server")]
+pub mod imap_inspect;
+#[cfg(feature = "server")]
 pub mod logging;

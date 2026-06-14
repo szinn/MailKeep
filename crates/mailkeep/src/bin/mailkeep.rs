@@ -23,14 +23,15 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let cli: CommandLine = clap::Parser::parse();
-    let config = Config::load().context("Cannot load configuration")?;
 
     match cli.command {
         Commands::Server => {
+            let config = Config::load().context("Cannot load configuration")?;
             init_logging()?;
 
             cmd_server(config).await
         }
+        Commands::Imap(args) => mailkeep::imap_inspect::run(args).await,
     }
 }
 
