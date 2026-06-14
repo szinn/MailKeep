@@ -1,0 +1,29 @@
+[package]
+name = "mk-imap"
+description = "MailKeep IMAP adapter (async-imap + tokio-rustls)"
+
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+[features]
+# Opt-in: runs tests that require a live greenmail container (see .justfile / Task 6).
+greenmail-tests = []
+
+[dependencies]
+mk-core.workspace = true
+
+async-imap.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+rustls.workspace = true
+secrecy.workspace = true
+tokio.workspace = true
+tokio-rustls.workspace = true
+tracing.workspace = true
+webpki-roots.workspace = true
+
+[lints]
+workspace = true

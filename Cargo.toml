@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/mailkeep", "crates/integration-tests", "crates/parser"]
+members = ["crates/mailkeep", "crates/integration-tests", "crates/parser", "crates/imap"]
 
 [workspace.package]
 version = "0.1.0"
@@ -16,6 +16,7 @@ license = "MIT"
 # Internal crates
 mk-core = { path = "crates/core" }
 mk-database = { path = "crates/database" }
+mk-imap = { path = "crates/imap" }
 mk-frontend = { path = "crates/frontend" }
 mk-parser = { path = "crates/parser" }
 mk-storage = { path = "crates/storage" }
@@ -41,6 +42,13 @@ mail-parser = "0.11.3"
 
 # Memory management
 mimalloc = "0.1.52"
+
+# IMAP adapter
+async-imap = { version = "0.11.2", default-features = false, features = ["runtime-tokio"] }
+futures = "0.3.31"
+rustls = { version = "0.23.40", default-features = false, features = ["ring", "logging", "std", "tls12"] }
+tokio-rustls = { version = "0.26.4", default-features = false, features = ["ring", "logging", "tls12"] }
+webpki-roots = "1.0.7"
 
 # Async
 async-trait = "0.1.89"
@@ -232,6 +240,8 @@ opt-level = 1
 [profile.dev.package.mk-parser]
 opt-level = 1
 [profile.dev.package.mailkeep]
+opt-level = 1
+[profile.dev.package.mk-imap]
 opt-level = 1
 # [profile.dev.package.integration-tests]
 # opt-level = 1
