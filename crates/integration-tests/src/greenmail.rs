@@ -1,31 +1,83 @@
-//! Integration tests for the `mk-imap` adapter against a live greenmail IMAP
-//! server (TLS).
+//! Integration tests for the `mk-imap` adapter against a greenmail IMAP server
+//! over TLS.
 //!
-//! Requires a greenmail container reachable on localhost (IMAPS 3993). The
-//! `GREENMAIL_OPTS` user below must match `USERNAME`/`PASSWORD` in this file:
+//! A greenmail container is started automatically via `testcontainers` on a
+//! dynamically-mapped port and torn down when the test's `Greenmail` handle
+//! drops — the only prerequisite is a running docker/colima daemon.
 //!
-//! ```text
-//! docker run -d --name greenmail -p 3993:3993 -p 3143:3143 \
-//!   -e GREENMAIL_OPTS='-Dgreenmail.setup.test.all -Dgreenmail.users=alice:pw@example.com' \
-//!   greenmail/standalone:2.1.0
-//! ```
-//!
-//! This module is compiled only under the `greenmail` feature (see
-//! `main.rs`), so the default `sqlite` integration run never touches it. The
-//! tests are additionally `#[ignore]`d so an `--all-features` build (e.g.
-//! `just insta`) *compiles* but does not *run* them without a server. Run with:
-//! `just imap-integration-tests` (which adds `--run-ignored all`).
+//! Compiled only under the `greenmail` feature (see `main.rs`), so the default
+//! `sqlite` run never touches it. The tests are also `#[ignore]`d so an
+//! `--all-features` build (e.g. `just insta`) compiles but does not run them
+//! without a daemon. Run with: `just imap-integration-tests` (`--run-ignored
+//! all`).
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
-use mk_core::imap::{ImapCredentials, ImapPort, ImapServerConfig, TlsMode};
+use mk_core::{
+    Error,
+    imap::{ImapCredentials, ImapPort, ImapServerConfig, TlsMode},
+};
 use mk_imap::ImapAdapter;
 use secrecy::SecretString;
+use testcontainers::{ContainerAsync, GenericImage, ImageExt, core::IntoContainerPort, runners::AsyncRunner};
 
-const HOST: &str = "127.0.0.1";
-const IMAPS_PORT: u16 = 3993;
 const USERNAME: &str = "alice";
 const PASSWORD: &str = "pw";
+/// greenmail's in-container IMAPS port; testcontainers maps it to a random host
+/// port.
+const IMAPS_PORT: u16 = 3993;
+
+/// A running greenmail container plus an adapter pointed at its mapped IMAPS
+/// port. Hold this for the duration of a test; dropping it tears greenmail
+/// down.
+struct Greenmail {
+    _container: ContainerAsync<GenericImage>,
+    adapter: ImapAdapter,
+    server: ImapServerConfig,
+}
+
+impl Greenmail {
+    /// Start greenmail with one preconfigured user and wait until it accepts
+    /// logins. Panics with a clear message if the daemon is unavailable.
+    async fn start() -> Self {
+        let container = GenericImage::new("greenmail/standalone", "2.1.0")
+            .with_exposed_port(IMAPS_PORT.tcp())
+            .with_env_var(
+                "GREENMAIL_OPTS",
+                // hostname=0.0.0.0 is required: greenmail defaults to binding
+                // 127.0.0.1 inside the container, which Docker's published port
+                // can't reach (the handshake just EOFs).
+                format!("-Dgreenmail.setup.test.all -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users={USERNAME}:{PASSWORD}@example.com -Dgreenmail.verbose"),
+            )
+            .start()
+            .await
+            .expect("greenmail container should start — is docker/colima running?");
+
+        let host = container.get_host().await.expect("greenmail host").to_string();
+        let port = container.get_host_port_ipv4(IMAPS_PORT.tcp()).await.expect("mapped IMAPS port");
+        let server = ImapServerConfig { host, port, tls: TlsMode::Tls };
+        let adapter = insecure_adapter();
+
+        // greenmail's JVM binds the IMAPS port a few seconds after the container
+        // starts. Poll the probe until it answers; retry only on connection
+        // (Infrastructure) errors so a genuine auth/config problem fails fast.
+        for attempt in 0..60 {
+            match adapter.test_connection(&server, &creds(PASSWORD)).await {
+                Ok(()) => break,
+                Err(Error::Infrastructure(_)) if attempt < 59 => {
+                    tokio::time::sleep(Duration::from_millis(500)).await;
+                }
+                Err(e) => panic!("greenmail is up but the probe failed (check user setup): {e:?}"),
+            }
+        }
+
+        Self {
+            _container: container,
+            adapter,
+            server,
+        }
+    }
+}
 
 /// Builds an adapter whose rustls config trusts ANY server certificate.
 /// TEST-ONLY — greenmail ships a self-signed cert. Never used in production
@@ -44,14 +96,6 @@ fn insecure_adapter() -> ImapAdapter {
     ImapAdapter::with_tls_config(Arc::new(config))
 }
 
-fn server() -> ImapServerConfig {
-    ImapServerConfig {
-        host: HOST.into(),
-        port: IMAPS_PORT,
-        tls: TlsMode::Tls,
-    }
-}
-
 fn creds(password: &str) -> ImapCredentials {
     ImapCredentials {
         username: USERNAME.into(),
@@ -60,25 +104,28 @@ fn creds(password: &str) -> ImapCredentials {
 }
 
 #[tokio::test]
-#[ignore = "requires a live greenmail container — run via `just imap-integration-tests`"]
+#[ignore = "needs a docker/colima daemon — run via `just imap-integration-tests`"]
 async fn test_connection_succeeds_with_valid_creds() {
-    let adapter = insecure_adapter();
-    adapter.test_connection(&server(), &creds(PASSWORD)).await.expect("valid creds should connect");
+    let gm = Greenmail::start().await;
+    gm.adapter
+        .test_connection(&gm.server, &creds(PASSWORD))
+        .await
+        .expect("valid creds should connect");
 }
 
 #[tokio::test]
-#[ignore = "requires a live greenmail container — run via `just imap-integration-tests`"]
+#[ignore = "needs a docker/colima daemon — run via `just imap-integration-tests`"]
 async fn test_connection_rejects_bad_creds() {
-    let adapter = insecure_adapter();
-    let err = adapter.test_connection(&server(), &creds("WRONG")).await.unwrap_err();
-    assert!(matches!(err, mk_core::Error::Validation(_)), "got {err:?}");
+    let gm = Greenmail::start().await;
+    let err = gm.adapter.test_connection(&gm.server, &creds("WRONG")).await.unwrap_err();
+    assert!(matches!(err, Error::Validation(_)), "got {err:?}");
 }
 
 #[tokio::test]
-#[ignore = "requires a live greenmail container — run via `just imap-integration-tests`"]
+#[ignore = "needs a docker/colima daemon — run via `just imap-integration-tests`"]
 async fn list_folders_returns_inbox() {
-    let adapter = insecure_adapter();
-    let folders = adapter.list_folders(&server(), &creds(PASSWORD)).await.expect("list should succeed");
+    let gm = Greenmail::start().await;
+    let folders = gm.adapter.list_folders(&gm.server, &creds(PASSWORD)).await.expect("list should succeed");
     assert!(
         folders.iter().any(|f| f.special_use == Some(mk_core::folder::SpecialUse::Inbox)),
         "expected an INBOX in {folders:?}"

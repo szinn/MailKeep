@@ -125,6 +125,7 @@ clap = { version = "4.6.1", features = ["cargo", "derive", "env"] }
 
 # Testing
 insta = { version = "1.48.0", features = ["filters"] }
+testcontainers = "0.24.0"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
