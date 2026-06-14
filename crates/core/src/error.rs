@@ -35,6 +35,13 @@ pub enum Error {
     #[error("Infrastructure error: {0}")]
     Infrastructure(String),
 
+    /// A port method that is defined but not yet implemented in this milestone.
+    /// Returned by IMAP lifecycle stubs
+    /// (`start_account`/`stop_account`/`status`) until MK-7 fills them in.
+    /// Never panics the runtime.
+    #[error("Not implemented: {0}")]
+    Unimplemented(&'static str),
+
     /// Storage system unreachable (NFS gone, library path missing). Transient.
     #[error("Storage unavailable: {0}")]
     StorageUnavailable(String),
@@ -72,9 +79,12 @@ impl Error {
         match self {
             Self::InvalidId(_) | Self::InvalidPageSize(_) | Self::InvalidToken(_) => ErrorKind::BadRequest,
             Self::Validation(_) => ErrorKind::InvalidInput,
-            Self::InvalidTransactionType | Self::Infrastructure(_) | Self::CryptoError(_) | Self::DecryptionFailed | Self::CredentialsDeserialize(_) => {
-                ErrorKind::Internal
-            }
+            Self::InvalidTransactionType
+            | Self::Infrastructure(_)
+            | Self::CryptoError(_)
+            | Self::DecryptionFailed
+            | Self::CredentialsDeserialize(_)
+            | Self::Unimplemented(_) => ErrorKind::Internal,
             Self::StorageUnavailable(_) => ErrorKind::ServiceUnavailable,
             Self::BlobNotFound { .. } => ErrorKind::NotFound,
             Self::RepositoryError(e) => e.kind(),
