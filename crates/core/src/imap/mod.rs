@@ -13,6 +13,6 @@ pub use model::{
 pub use port::ImapPort;
 #[cfg(any(test, feature = "test-support"))]
 pub use port::MockImapPort;
-pub use service::ImapAccountService;
 #[cfg(any(test, feature = "test-support"))]
 pub use service::MockImapAccountService;
+pub use service::{ImapAccountService, ImapAccountServiceImpl};
