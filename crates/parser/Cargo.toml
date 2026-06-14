@@ -1,6 +1,7 @@
 [package]
 name = "mk-parser"
 description = "MailKeep message parser adapter (mail-parser)"
+autotests = false
 
 version = { workspace = true }
 edition = { workspace = true }

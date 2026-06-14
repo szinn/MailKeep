@@ -216,21 +216,21 @@ mod tests {
 
     #[test]
     fn missing_message_id_is_synthesized_from_hash() {
-        let raw = include_bytes!("../tests/fixtures/no_message_id.eml");
+        let raw = include_bytes!("../fixtures/no_message_id.eml");
         let parsed = parse_eml(hash(), raw).unwrap();
         assert_eq!(parsed.rfc822_message_id, format!("<{}@mailkeep.invalid>", hash().as_hex()));
     }
 
     #[test]
     fn missing_from_uses_sentinel() {
-        let raw = include_bytes!("../tests/fixtures/no_from.eml");
+        let raw = include_bytes!("../fixtures/no_from.eml");
         let parsed = parse_eml(hash(), raw).unwrap();
         assert_eq!(parsed.from_address.as_str(), "unknown@mailkeep.invalid");
     }
 
     #[test]
     fn alternative_snippet_prefers_plain_text() {
-        let raw = include_bytes!("../tests/fixtures/alternative.eml");
+        let raw = include_bytes!("../fixtures/alternative.eml");
         let parsed = parse_eml(hash(), raw).unwrap();
         assert!(parsed.snippet.len() <= 200);
         assert!(!parsed.snippet.contains('<'), "snippet must not contain HTML tags");
@@ -238,7 +238,7 @@ mod tests {
 
     #[test]
     fn html_only_snippet_strips_tags() {
-        let raw = include_bytes!("../tests/fixtures/html_only.eml");
+        let raw = include_bytes!("../fixtures/html_only.eml");
         let parsed = parse_eml(hash(), raw).unwrap();
         assert!(parsed.snippet.len() <= 200);
         assert!(!parsed.snippet.contains('<'), "snippet must not contain HTML tags");
@@ -246,7 +246,7 @@ mod tests {
 
     #[test]
     fn real_message_id_is_canonicalized_with_brackets() {
-        let raw = include_bytes!("../tests/fixtures/mixed_attachment.eml");
+        let raw = include_bytes!("../fixtures/mixed_attachment.eml");
         let parsed = parse_eml(hash(), raw).unwrap();
         assert_eq!(
             parsed.rfc822_message_id, "<mixed001@example.com>",
@@ -257,7 +257,7 @@ mod tests {
 
     #[test]
     fn mixed_extracts_attachment() {
-        let raw = include_bytes!("../tests/fixtures/mixed_attachment.eml");
+        let raw = include_bytes!("../fixtures/mixed_attachment.eml");
         let parsed = parse_eml(hash(), raw).unwrap();
         assert_eq!(parsed.attachments.len(), 1);
         assert!(parsed.attachments[0].filename.is_some());
@@ -266,7 +266,7 @@ mod tests {
 
     #[test]
     fn snapshot_parsed_shape() {
-        let raw = include_bytes!("../tests/fixtures/mixed_attachment.eml");
+        let raw = include_bytes!("../fixtures/mixed_attachment.eml");
         let parsed = parse_eml(ContentHash::compute(b"snapshot-fixture"), raw).unwrap();
         // Render a stable, snapshot-friendly view (avoid raw bytes).
         let view = format!(
