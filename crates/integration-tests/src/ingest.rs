@@ -8,7 +8,6 @@ use std::{sync::Arc, time::Duration};
 use bytes::Bytes;
 use chrono::Utc;
 use mk_core::{
-    ExternalServicesBuilder,
     account::{AccountId, CreateAccountParams},
     create_core_subsystem,
     folder::{Folder, NewFolderRequest, SpecialUse},
@@ -16,7 +15,7 @@ use mk_core::{
     ingest::IngestRequest,
     message::{MessageFlags, MessageId},
     repository::{RepositoryService, transaction},
-    test_support::test_cipher_service,
+    test_support::{default_external_services_builder, test_cipher_service},
     types::{ContentHash, EmailAddress},
     user::{NewUser, User},
 };
@@ -39,12 +38,11 @@ async fn setup_fs() -> TestContext {
     let repository_service = create_repository_service(db).await.unwrap();
 
     let core = mk_core::create_services(
-        ExternalServicesBuilder::default()
+        default_external_services_builder()
             .repository_service(repository_service.clone())
             .cipher_service(cipher)
             .raw_storage_service(storage.raw_storage_service)
             .attachment_storage_service(storage.attachment_storage_service)
-            .job_concurrency(1)
             .build()
             .unwrap(),
     )

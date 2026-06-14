@@ -6,6 +6,9 @@ use crate::{
     Error, ExternalServicesBuilder,
     account::AccountId,
     crypto::{CipherService, create_cipher_service},
+    folder::FolderService,
+    imap::{ImapConnectionParams, ImapCredentials, ImapPort, ImapServerConfig, RemoteFolder, SyncStatus},
+    ingest::IngestService,
     storage::{AttachmentStorageService, RawStorageService},
     types::ContentHash,
 };
@@ -56,6 +59,29 @@ impl AttachmentStorageService for NopAttachmentStorage {
     }
 }
 
+/// Nop `ImapPort` — every method returns `Error::Unimplemented`. For tests that
+/// construct `CoreServices` but never exercise IMAP.
+struct NopImapPort;
+
+#[async_trait]
+impl ImapPort for NopImapPort {
+    async fn test_connection(&self, _server: &ImapServerConfig, _creds: &ImapCredentials) -> Result<(), Error> {
+        Err(Error::Unimplemented("NopImapPort::test_connection"))
+    }
+    async fn list_folders(&self, _server: &ImapServerConfig, _creds: &ImapCredentials) -> Result<Vec<RemoteFolder>, Error> {
+        Err(Error::Unimplemented("NopImapPort::list_folders"))
+    }
+    async fn start_account(&self, _account_id: AccountId, _params: ImapConnectionParams) -> Result<(), Error> {
+        Err(Error::Unimplemented("NopImapPort::start_account"))
+    }
+    async fn stop_account(&self, _account_id: AccountId) -> Result<(), Error> {
+        Err(Error::Unimplemented("NopImapPort::stop_account"))
+    }
+    async fn status(&self, _account_id: AccountId) -> Result<SyncStatus, Error> {
+        Err(Error::Unimplemented("NopImapPort::status"))
+    }
+}
+
 /// Returns a `CipherService` backed by a fixed test key. Suitable for any
 /// test that exercises crypto without needing a real secret.
 pub fn test_cipher_service() -> Arc<dyn CipherService> {
@@ -75,4 +101,7 @@ pub fn default_external_services_builder() -> ExternalServicesBuilder {
         .raw_storage_service(Arc::new(NopRawStorage) as Arc<dyn RawStorageService>)
         .attachment_storage_service(Arc::new(NopAttachmentStorage) as Arc<dyn AttachmentStorageService>)
         .job_concurrency(1)
+        .imap_port_factory(Box::new(|_ingest: Arc<dyn IngestService>, _folders: Arc<dyn FolderService>| {
+            Arc::new(NopImapPort) as Arc<dyn ImapPort>
+        }))
 }

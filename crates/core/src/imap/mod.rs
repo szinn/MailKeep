@@ -7,6 +7,16 @@ mod model;
 mod port;
 mod service;
 
+use std::sync::Arc;
+
+use crate::{folder::FolderService, ingest::IngestService};
+
+/// Factory that constructs the IMAP adapter inside `CoreServices::new`, given
+/// the core services it depends on. Keeps `core` adapter-agnostic: the concrete
+/// `ImapPort` is built by the binary's wiring (or a test nop) without `core`
+/// depending on the adapter crate. Consumed exactly once.
+pub type ImapPortFactory = Box<dyn FnOnce(Arc<dyn IngestService>, Arc<dyn FolderService>) -> Arc<dyn ImapPort> + Send>;
+
 pub use model::{
     FolderConfig, ImapConnectionParams, ImapCredentials, ImapServerConfig, RemoteFolder, SyncState, SyncStatus, TlsMode, special_use_from_attributes,
 };

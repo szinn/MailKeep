@@ -29,8 +29,8 @@ pub trait ImapAccountService: Send + Sync {
     async fn stop_all(&self) -> Result<(), Error>;
 }
 
-/// Forwarding [`ImapAccountService`] over an [`ImapPort`]; lifecycle methods are
-/// stubbed with [`Error::Unimplemented`] until MK-7.
+/// Forwarding [`ImapAccountService`] over an [`ImapPort`]; lifecycle methods
+/// are stubbed with [`Error::Unimplemented`] until MK-7.
 pub struct ImapAccountServiceImpl {
     port: Arc<dyn ImapPort>,
 }

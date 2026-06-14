@@ -23,6 +23,7 @@ use crate::{
     auth::{AuthService, AuthServiceImpl},
     crypto::CipherService,
     folder::{FolderService, FolderServiceImpl},
+    imap::{ImapAccountService, ImapAccountServiceImpl, ImapPortFactory},
     ingest::{IngestService, create_ingest_service},
     jobs::{JobService, create_job_service, create_job_worker_subsystem},
     message::{MessageService, MessageServiceImpl},
@@ -46,6 +47,7 @@ pub struct ExternalServices {
     pub(crate) raw_storage_service: Arc<dyn RawStorageService>,
     pub(crate) attachment_storage_service: Arc<dyn AttachmentStorageService>,
     pub(crate) job_concurrency: usize,
+    pub(crate) imap_port_factory: ImapPortFactory,
 }
 
 pub struct CoreServices {
@@ -56,6 +58,7 @@ pub struct CoreServices {
     pub folder_service: Arc<dyn FolderService>,
     pub message_service: Arc<dyn MessageService>,
     pub ingest_service: Arc<dyn IngestService>,
+    pub imap_account_service: Arc<dyn ImapAccountService>,
     pub cipher_service: Arc<dyn CipherService>,
     pub raw_storage_service: Arc<dyn RawStorageService>,
     pub attachment_storage_service: Arc<dyn AttachmentStorageService>,
@@ -73,9 +76,16 @@ impl CoreServices {
             raw_storage_service,
             attachment_storage_service,
             job_concurrency,
+            imap_port_factory,
         } = external;
 
         let (job_service, wake_notify) = create_job_service(repository_service.clone());
+
+        let folder_service: Arc<dyn FolderService> = Arc::new(FolderServiceImpl::new(repository_service.clone()));
+        let ingest_service = create_ingest_service(raw_storage_service.clone(), job_service.clone());
+
+        let imap_port = imap_port_factory(ingest_service.clone(), folder_service.clone());
+        let imap_account_service: Arc<dyn ImapAccountService> = Arc::new(ImapAccountServiceImpl::new(imap_port));
 
         Self {
             account_service: Arc::new(AccountServiceImpl::new(
@@ -87,9 +97,10 @@ impl CoreServices {
             auth_service: Arc::new(AuthServiceImpl::new(repository_service.clone())),
             user_service: Arc::new(UserServiceImpl::new(repository_service.clone())),
             user_setting_service: Arc::new(UserSettingServiceImpl::new(repository_service.clone())),
-            folder_service: Arc::new(FolderServiceImpl::new(repository_service.clone())),
+            folder_service,
             message_service: Arc::new(MessageServiceImpl::new(repository_service.clone())),
-            ingest_service: create_ingest_service(raw_storage_service.clone(), job_service.clone()),
+            ingest_service,
+            imap_account_service,
             cipher_service,
             raw_storage_service,
             attachment_storage_service,
