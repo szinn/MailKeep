@@ -3766,6 +3766,7 @@ dependencies = [
  "mk-core",
  "mk-database",
  "mk-frontend",
+ "mk-imap",
  "mk-parser",
  "mk-storage",
  "serde",

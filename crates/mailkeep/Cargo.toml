@@ -28,6 +28,7 @@ server = [
     "dep:mk-core",
     "dep:mk-database",
     "dep:mk-frontend",
+    "dep:mk-imap",
     "dep:mk-parser",
     "dep:mk-storage",
     "dep:serde",
@@ -45,6 +46,7 @@ web = ["dep:mk-frontend", "mk-frontend?/web"]
 mk-core = { workspace = true, optional = true }
 mk-database = { workspace = true, optional = true }
 mk-frontend = { workspace = true, optional = true }
+mk-imap = { workspace = true, optional = true }
 mk-parser = { workspace = true, optional = true }
 mk-storage = { workspace = true, optional = true }
 
