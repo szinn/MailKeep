@@ -22,7 +22,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{
     connect::{connect_and_login, production_client_config},
-    sync::{AccountHandle, initial_status, not_running_status, run_account_once},
+    sync::{AccountHandle, initial_status, not_running_status, poll_task},
 };
 
 /// Production IMAP adapter over async-imap + tokio-rustls.
@@ -35,9 +35,7 @@ pub struct ImapAdapter {
     ingest_service: Arc<dyn IngestService>,
     folder_service: Arc<dyn FolderService>,
     message_service: Arc<dyn MessageService>,
-    // Consumed by the poll task added in Task 3; held now so the factory/ctor
-    // signature is stable.
-    #[allow(dead_code)]
+    // Interval between poll passes over the non-IDLE folders.
     poll_interval: Duration,
     tracked: Mutex<HashMap<AccountId, AccountHandle>>,
 }
@@ -202,14 +200,43 @@ impl ImapPort for ImapAdapter {
         let status = Arc::new(Mutex::new(initial_status()));
         let mut tasks = JoinSet::new();
 
+        // Partition the enabled folders into the single `idle_enabled` folder
+        // (its dedicated IDLE task arrives in Task 4) and the rest (the poll
+        // set). The partition is computed now so Task 4 can simply move the
+        // idle folder out of the poll set into the IDLE task.
+        let (idle_folders, _poll_folders): (Vec<_>, Vec<_>) = params.folders.iter().cloned().partition(|f| f.idle_enabled);
+
+        // Task 3 has no IDLE task yet, so the poll task covers ALL enabled
+        // folders (idle + non-idle) for now; otherwise the inbox would go
+        // unsynced between Tasks 3 and 4. Task 4 moves the `idle_enabled`
+        // folder to a dedicated IDLE task and narrows this to `poll_folders`.
+        let _ = idle_folders;
+        let poll_folders = params.folders.clone();
+
         let ingest = self.ingest_service.clone();
         let folders = self.folder_service.clone();
         let messages = self.message_service.clone();
         let tls = self.tls_config.clone();
+        let poll_interval = self.poll_interval;
+        let server = params.server.clone();
+        let creds = params.credentials.clone();
         let status_for_task = status.clone();
         let cancel_for_task = cancel.clone();
         tasks.spawn(async move {
-            run_account_once(account_id, params, ingest, folders, messages, tls, status_for_task, cancel_for_task).await;
+            poll_task(
+                account_id,
+                server,
+                creds,
+                poll_folders,
+                poll_interval,
+                ingest,
+                folders,
+                messages,
+                tls,
+                status_for_task,
+                cancel_for_task,
+            )
+            .await;
         });
 
         self.tracked.lock().await.insert(account_id, AccountHandle { cancel, tasks, status });

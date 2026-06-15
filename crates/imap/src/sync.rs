@@ -1,11 +1,13 @@
 //! Per-account sync task machinery and the shared fetch routine.
 //!
-//! Task 2 scope (MK-7): a single one-shot pass per account — connect, SELECT
-//! each enabled folder, check UIDVALIDITY, fetch everything `> last_uid` in
-//! batches, ingest each message, checkpoint per batch — then idle-wait for
-//! cancellation. IDLE (Task 4) and the poll timer (Task 3) build on this spine.
+//! Task 3 scope (MK-7): a dedicated poll task per account on its own
+//! connection. It runs an initial pass immediately, then every `poll_interval`
+//! re-SELECTs and syncs each polled folder, reconnecting on the next tick after
+//! a failure. A connection-error/cancellation-aware sleep keeps shutdown
+//! prompt. IDLE (Task 4) splits the single `idle_enabled` folder onto its own
+//! dedicated connection and adds exponential-backoff reconnect.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use bytes::Bytes;
 use chrono::Utc;
@@ -14,7 +16,7 @@ use mk_core::{
     Error,
     account::AccountId,
     folder::{FolderId, FolderService},
-    imap::{FolderConfig, ImapConnectionParams, SyncState, SyncStatus},
+    imap::{FolderConfig, ImapCredentials, ImapServerConfig, SyncState, SyncStatus},
     ingest::{IngestRequest, IngestService},
     message::{MessageFlags, MessageService},
 };
@@ -58,15 +60,21 @@ pub(crate) fn not_running_status() -> SyncStatus {
     }
 }
 
-/// One-shot pass over all of an account's folders, then park until cancelled.
+/// Poll-sync an account's folders on its own connection.
 ///
-/// Task 3 splits this into a poll task; Task 4 adds the IDLE task. For now a
-/// single connection syncs every folder once. The decrypted credentials live in
-/// `params` and are dropped when this future ends.
+/// Runs an initial pass immediately, then loops: a cancellation-aware
+/// `sleep(poll_interval)` followed by a re-SELECT + fetch of each polled
+/// folder. A connect or sync failure drops the session and reconnects on the
+/// next tick (exponential backoff is added in Task 4). Cancellation breaks the
+/// loop promptly. The decrypted credentials live in `creds` and are dropped
+/// when this future ends.
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn run_account_once(
+pub(crate) async fn poll_task(
     account_id: AccountId,
-    params: ImapConnectionParams,
+    server: ImapServerConfig,
+    creds: ImapCredentials,
+    folders_cfg: Vec<FolderConfig>,
+    poll_interval: Duration,
     ingest: Arc<dyn IngestService>,
     folders: Arc<dyn FolderService>,
     messages: Arc<dyn MessageService>,
@@ -74,46 +82,62 @@ pub(crate) async fn run_account_once(
     status: Arc<Mutex<SyncStatus>>,
     cancel: CancellationToken,
 ) {
-    let mut s = status.lock().await;
-    s.state = SyncState::Connecting;
-    s.last_sync_started_at = Some(Utc::now());
-    drop(s);
-
-    match connect_and_login(&params.server, &params.credentials, tls).await {
-        Ok(mut session) => {
-            for folder in &params.folders {
-                if cancel.is_cancelled() {
-                    break;
-                }
-                if let Err(e) = sync_folder(&mut session, account_id, folder, &ingest, &folders, &messages, &status).await {
-                    tracing::warn!(account_id, folder = %folder.path, error = %e, "sync_folder failed");
-                    let mut s = status.lock().await;
-                    s.state = SyncState::Error;
-                    s.last_error = Some(e.to_string());
-                }
-            }
-            let mut s = status.lock().await;
-            if s.state != SyncState::Error {
-                s.state = SyncState::Idle;
-            }
-            s.last_sync_finished_at = Some(Utc::now());
-            drop(s);
-            // Best-effort logout; failure here is benign.
-            if let Err(e) = session.logout().await {
-                tracing::debug!(account_id, ?e, "IMAP logout failed after initial sync");
-            }
-        }
-        Err(e) => {
-            tracing::warn!(account_id, error = %e, "initial connect failed");
-            let mut s = status.lock().await;
-            s.state = SyncState::Error;
-            s.last_error = Some(e.to_string());
-        }
+    if folders_cfg.is_empty() {
+        return;
     }
 
-    // Task 2 has no poll/IDLE loop yet: hold the slot until cancellation so
-    // `stop_account` has something to drain and `status` stays queryable.
-    cancel.cancelled().await;
+    loop {
+        {
+            let mut s = status.lock().await;
+            s.state = SyncState::Connecting;
+            s.last_sync_started_at = Some(Utc::now());
+        };
+
+        match connect_and_login(&server, &creds, tls.clone()).await {
+            Ok(mut session) => {
+                let mut pass_failed = false;
+                for folder in &folders_cfg {
+                    if cancel.is_cancelled() {
+                        break;
+                    }
+                    if let Err(e) = sync_folder(&mut session, account_id, folder, &ingest, &folders, &messages, &status).await {
+                        tracing::warn!(account_id, folder = %folder.path, error = %e, "poll sync_folder failed");
+                        let mut s = status.lock().await;
+                        s.state = SyncState::Error;
+                        s.last_error = Some(e.to_string());
+                        pass_failed = true;
+                        // Drop the session and reconnect on the next tick.
+                        break;
+                    }
+                }
+
+                {
+                    let mut s = status.lock().await;
+                    if !pass_failed {
+                        s.state = SyncState::Idle;
+                    }
+                    s.last_sync_finished_at = Some(Utc::now());
+                };
+
+                // Best-effort logout; failure here is benign.
+                if let Err(e) = session.logout().await {
+                    tracing::debug!(account_id, ?e, "IMAP logout failed after poll pass");
+                }
+            }
+            Err(e) => {
+                tracing::warn!(account_id, error = %e, "poll connect failed");
+                let mut s = status.lock().await;
+                s.state = SyncState::Error;
+                s.last_error = Some(e.to_string());
+            }
+        }
+
+        // Cancellation-aware wait before the next pass.
+        tokio::select! {
+            () = cancel.cancelled() => break,
+            () = tokio::time::sleep(poll_interval) => {}
+        }
+    }
 }
 
 /// SELECT a folder, check UIDVALIDITY, fetch everything `> last_uid` in
