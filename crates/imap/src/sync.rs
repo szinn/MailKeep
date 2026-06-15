@@ -1,11 +1,17 @@
 //! Per-account sync task machinery and the shared fetch routine.
 //!
-//! Task 3 scope (MK-7): a dedicated poll task per account on its own
-//! connection. It runs an initial pass immediately, then every `poll_interval`
-//! re-SELECTs and syncs each polled folder, reconnecting on the next tick after
-//! a failure. A connection-error/cancellation-aware sleep keeps shutdown
-//! prompt. IDLE (Task 4) splits the single `idle_enabled` folder onto its own
-//! dedicated connection and adds exponential-backoff reconnect.
+//! Two long-lived tasks run per account, each on its own connection:
+//! - `poll_task` (connection #2) re-SELECTs and syncs each non-idle folder
+//!   every `poll_interval`.
+//! - `idle_task` (connection #1) owns the single `idle_enabled` folder: it
+//!   catch-up fetches, then parks in IMAP IDLE, waking on EXISTS/timeout to
+//!   re-fetch and re-enter IDLE.
+//!
+//! Both share `sync_folder` (SELECT + UIDVALIDITY check + batched fetch +
+//! checkpoint) and the `backoff_delay` exponential-backoff reconnect: retry
+//! forever, set `SyncState::Error` after [`FAILURE_ERROR_THRESHOLD`]
+//! consecutive failures, reset on success. Cancellation breaks both promptly
+//! (IDLE sends DONE then logs out).
 
 use std::{sync::Arc, time::Duration};
 
@@ -60,14 +66,35 @@ pub(crate) fn not_running_status() -> SyncStatus {
     }
 }
 
+/// Number of consecutive failures after which a task reports
+/// `SyncState::Error`. Retries continue regardless; this only surfaces
+/// sustained trouble to the status reconciliation tick (and, via it, to
+/// `AccountStatus`).
+const FAILURE_ERROR_THRESHOLD: u32 = 5;
+
+/// Exponential-backoff delay for the n-th consecutive failure:
+/// `min(5s · 2^(n-1), 300s)`. `n` is 1-based (the first failure waits 5s).
+/// This 1-based curve is intentional and gentler than the spec's `5s ·
+/// 2^attempt` (first retry 5s, not 10s) — do not "correct" it back to a 0-based
+/// exponent. A success resets the counter; both the poll and IDLE tasks use
+/// this.
+fn backoff_delay(consecutive_failures: u32) -> Duration {
+    // Exponent is (failures - 1); guard the n == 0 case (no failure yet → 5s).
+    let exponent = consecutive_failures.saturating_sub(1).min(6);
+    let secs = 5u64.saturating_mul(1u64 << exponent);
+    Duration::from_secs(secs.min(300))
+}
+
 /// Poll-sync an account's folders on its own connection.
 ///
-/// Runs an initial pass immediately, then loops: a cancellation-aware
-/// `sleep(poll_interval)` followed by a re-SELECT + fetch of each polled
-/// folder. A connect or sync failure drops the session and reconnects on the
-/// next tick (exponential backoff is added in Task 4). Cancellation breaks the
-/// loop promptly. The decrypted credentials live in `creds` and are dropped
-/// when this future ends.
+/// Runs an initial pass immediately, then loops: a re-SELECT + fetch of each
+/// polled folder followed by a cancellation-aware wait before the next pass.
+/// On a successful pass it waits `poll_interval`; on a connect/sync failure it
+/// waits `backoff_delay(consecutive_failures)` and reconnects, retrying
+/// forever. After [`FAILURE_ERROR_THRESHOLD`] consecutive failures the status
+/// is set to `Error`; a successful pass resets the counter and restores
+/// `Idle`. The decrypted credentials live in `creds` and are dropped when this
+/// future ends.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn poll_task(
     account_id: AccountId,
@@ -86,6 +113,8 @@ pub(crate) async fn poll_task(
         return;
     }
 
+    let mut failures: u32 = 0;
+
     loop {
         {
             let mut s = status.lock().await;
@@ -93,56 +122,190 @@ pub(crate) async fn poll_task(
             s.last_sync_started_at = Some(Utc::now());
         };
 
-        match connect_and_login(&server, &creds, tls.clone()).await {
-            Ok(mut session) => {
-                let mut pass_failed = false;
-                for folder in &folders_cfg {
-                    if cancel.is_cancelled() {
-                        break;
-                    }
-                    if let Err(e) = sync_folder(&mut session, account_id, folder, &ingest, &folders, &messages, &status).await {
-                        tracing::warn!(account_id, folder = %folder.path, error = %e, "poll sync_folder failed");
-                        let mut s = status.lock().await;
-                        s.state = SyncState::Error;
-                        s.last_error = Some(e.to_string());
-                        pass_failed = true;
-                        // Drop the session and reconnect on the next tick.
-                        break;
-                    }
+        // One full pass: connect, sync every folder, logout. Any error short-
+        // circuits to a reconnect with backoff.
+        let pass: Result<(), Error> = async {
+            let mut session = connect_and_login(&server, &creds, tls.clone()).await?;
+            for folder in &folders_cfg {
+                if cancel.is_cancelled() {
+                    break;
                 }
+                sync_folder(&mut session, account_id, folder, &ingest, &folders, &messages, &status).await?;
+            }
+            // Best-effort logout; failure here is benign.
+            if let Err(e) = session.logout().await {
+                tracing::debug!(account_id, ?e, "IMAP logout failed after poll pass");
+            }
+            Ok(())
+        }
+        .await;
 
-                {
-                    let mut s = status.lock().await;
-                    if !pass_failed {
-                        s.state = SyncState::Idle;
-                    }
-                    s.last_sync_finished_at = Some(Utc::now());
-                };
-
-                // Best-effort logout; failure here is benign.
-                if let Err(e) = session.logout().await {
-                    tracing::debug!(account_id, ?e, "IMAP logout failed after poll pass");
-                }
+        let wait = match pass {
+            Ok(()) => {
+                // Success resets the failure counter and restores Idle.
+                failures = 0;
+                let mut s = status.lock().await;
+                s.state = SyncState::Idle;
+                s.last_sync_finished_at = Some(Utc::now());
+                poll_interval
             }
             Err(e) => {
-                tracing::warn!(account_id, error = %e, "poll connect failed");
-                let mut s = status.lock().await;
-                s.state = SyncState::Error;
-                s.last_error = Some(e.to_string());
+                failures = failures.saturating_add(1);
+                tracing::warn!(account_id, failures, error = %e, "poll pass failed");
+                {
+                    let mut s = status.lock().await;
+                    if failures >= FAILURE_ERROR_THRESHOLD {
+                        s.state = SyncState::Error;
+                    }
+                    s.last_error = Some(e.to_string());
+                };
+                backoff_delay(failures)
             }
-        }
+        };
 
         // Cancellation-aware wait before the next pass.
         tokio::select! {
             () = cancel.cancelled() => break,
-            () = tokio::time::sleep(poll_interval) => {}
+            () = tokio::time::sleep(wait) => {}
+        }
+    }
+}
+
+/// IDLE-sync the single `idle_enabled` folder on its own dedicated connection.
+///
+/// Connects, SELECTs the folder (re-checking UIDVALIDITY through
+/// [`sync_folder`]), fetches everything `> last_uid`, then enters IMAP IDLE.
+/// IDLE wakes on an `EXISTS`/`* ...` server notification or the 29-minute
+/// timeout; either way the loop re-SELECTs and fetches new mail, then re-enters
+/// IDLE. Cancellation while parked in IDLE breaks out cleanly: it sends `DONE`
+/// (recovering the session), logs out, and returns.
+///
+/// Connection/protocol failures reconnect with the shared exponential backoff
+/// ([`backoff_delay`]); after [`FAILURE_ERROR_THRESHOLD`] consecutive failures
+/// the status is set to `Error` (retries continue), and a successful reconnect
+/// resets the counter. The decrypted credentials in `creds` drop when this
+/// future ends.
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn idle_task(
+    account_id: AccountId,
+    server: ImapServerConfig,
+    creds: ImapCredentials,
+    folder: FolderConfig,
+    ingest: Arc<dyn IngestService>,
+    folders: Arc<dyn FolderService>,
+    messages: Arc<dyn MessageService>,
+    tls: Arc<ClientConfig>,
+    status: Arc<Mutex<SyncStatus>>,
+    cancel: CancellationToken,
+) {
+    // Longest a single IDLE may sit before we DONE and re-issue it. RFC 2177
+    // advises ≤29 minutes to avoid being logged off by inactivity timeouts.
+    const IDLE_TIMEOUT: Duration = Duration::from_mins(29);
+
+    let mut failures: u32 = 0;
+
+    loop {
+        if cancel.is_cancelled() {
+            break;
+        }
+
+        {
+            let mut s = status.lock().await;
+            s.state = SyncState::Connecting;
+            s.last_sync_started_at = Some(Utc::now());
+        };
+
+        // One connection's lifetime: connect, then loop fetch→IDLE→fetch until
+        // cancelled or an error forces a reconnect. Returns `Ok(())` when the
+        // loop exited because of cancellation (clean shutdown); `Err` forces a
+        // backoff + reconnect.
+        let outcome: Result<(), Error> = async {
+            let mut session = connect_and_login(&server, &creds, tls.clone()).await?;
+            // Local cursor, kept accurate across re-SELECTs from sync_folder's
+            // returned (high_uid, uidvalidity).
+            let mut cur = folder.clone();
+
+            loop {
+                if cancel.is_cancelled() {
+                    let _ = session.logout().await;
+                    return Ok(());
+                }
+
+                let (high, server_uidvalidity) = sync_folder(&mut session, account_id, &cur, &ingest, &folders, &messages, &status).await?;
+                cur.last_uid = high;
+                cur.uidvalidity = Some(server_uidvalidity);
+
+                // A fetch pass succeeded: reset failures and report Idle while
+                // parked in IDLE.
+                failures = 0;
+                {
+                    let mut s = status.lock().await;
+                    s.state = SyncState::Idle;
+                    s.last_sync_finished_at = Some(Utc::now());
+                };
+
+                // Enter IDLE. `idle()` consumes the session; `done()` returns it.
+                let mut handle = session.idle();
+                handle.init().await.map_err(|e| Error::Infrastructure(format!("IMAP IDLE init failed: {e}")))?;
+
+                // `wait_with_timeout` borrows `handle` mutably (the future is
+                // `+ '_`), so the future and stop source must be dropped before
+                // we can call `handle.done()` (which consumes `handle`).
+                let cancelled = {
+                    let (idle_fut, stop) = handle.wait_with_timeout(IDLE_TIMEOUT);
+                    tokio::pin!(idle_fut);
+                    let cancelled = tokio::select! {
+                        res = &mut idle_fut => {
+                            // EXISTS / new data / keepalive-timeout: re-fetch.
+                            if let Err(e) = res {
+                                drop(stop);
+                                return Err(Error::Infrastructure(format!("IMAP IDLE wait failed: {e}")));
+                            }
+                            false
+                        }
+                        () = cancel.cancelled() => true,
+                    };
+                    drop(stop);
+                    cancelled
+                };
+
+                // Recover the session by sending DONE.
+                session = handle.done().await.map_err(|e| Error::Infrastructure(format!("IMAP IDLE done failed: {e}")))?;
+
+                if cancelled {
+                    let _ = session.logout().await;
+                    return Ok(());
+                }
+                // Otherwise loop: re-SELECT + fetch + re-enter IDLE.
+            }
+        }
+        .await;
+
+        match outcome {
+            Ok(()) => break, // cancelled cleanly
+            Err(e) => {
+                failures = failures.saturating_add(1);
+                tracing::warn!(account_id, failures, folder = %folder.path, error = %e, "IDLE connection failed");
+                {
+                    let mut s = status.lock().await;
+                    if failures >= FAILURE_ERROR_THRESHOLD {
+                        s.state = SyncState::Error;
+                    }
+                    s.last_error = Some(e.to_string());
+                };
+                tokio::select! {
+                    () = cancel.cancelled() => break,
+                    () = tokio::time::sleep(backoff_delay(failures)) => {}
+                }
+            }
         }
     }
 }
 
 /// SELECT a folder, check UIDVALIDITY, fetch everything `> last_uid` in
 /// batches, ingest each message, checkpoint per batch. Returns the new
-/// high-water UID.
+/// high-water UID together with the server's current UIDVALIDITY, so a caller
+/// (the IDLE loop) can keep an accurate cursor across re-SELECTs.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn sync_folder(
     session: &mut ImapSession,
@@ -152,7 +315,7 @@ pub(crate) async fn sync_folder(
     folders: &Arc<dyn FolderService>,
     messages: &Arc<dyn MessageService>,
     status: &Arc<Mutex<SyncStatus>>,
-) -> Result<u32, Error> {
+) -> Result<(u32, u32), Error> {
     let mailbox = session
         .select(&folder.path)
         .await
@@ -184,7 +347,7 @@ pub(crate) async fn sync_folder(
         && upper < from
     {
         // Nothing new to fetch.
-        return Ok(high);
+        return Ok((high, server_uidvalidity));
     }
 
     loop {
@@ -238,7 +401,7 @@ pub(crate) async fn sync_folder(
         from = to.saturating_add(1);
     }
 
-    Ok(high)
+    Ok((high, server_uidvalidity))
 }
 
 /// UIDVALIDITY rollover handling.
@@ -332,5 +495,23 @@ mod tests {
         let mapped = map_flags([Flag::MayCreate, Flag::Seen].into_iter());
         assert!(mapped.seen);
         assert!(mapped.custom.is_empty());
+    }
+
+    #[test]
+    fn backoff_delay_follows_5s_doubling_with_300s_cap() {
+        // n == 0 (no failure yet) is treated as the base 5s delay.
+        assert_eq!(backoff_delay(0), Duration::from_secs(5));
+        // 1-based: 5s · 2^(n-1) → 5, 10, 20, 40, 80, 160, then capped at 300.
+        assert_eq!(backoff_delay(1), Duration::from_secs(5));
+        assert_eq!(backoff_delay(2), Duration::from_secs(10));
+        assert_eq!(backoff_delay(3), Duration::from_secs(20));
+        assert_eq!(backoff_delay(4), Duration::from_secs(40));
+        assert_eq!(backoff_delay(5), Duration::from_secs(80));
+        assert_eq!(backoff_delay(6), Duration::from_secs(160));
+        // 5 · 2^6 = 320 → capped at 300.
+        assert_eq!(backoff_delay(7), Duration::from_secs(300));
+        // Far beyond the exponent cap stays at 300 (no overflow/panic).
+        assert_eq!(backoff_delay(100), Duration::from_secs(300));
+        assert_eq!(backoff_delay(u32::MAX), Duration::from_secs(300));
     }
 }
