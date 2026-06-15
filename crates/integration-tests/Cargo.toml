@@ -21,7 +21,7 @@ sqlite = []
 # Adapter-vs-live-server tests for mk-imap. Spins up a greenmail container via
 # testcontainers (needs a running docker/colima daemon); not part of the default
 # run. See src/greenmail.rs / `just imap-integration-tests`.
-greenmail = ["dep:mk-imap", "dep:rustls", "dep:testcontainers"]
+greenmail = ["dep:mk-imap", "dep:rustls", "dep:testcontainers", "dep:async-imap", "dep:tokio-rustls"]
 
 [dependencies]
 mk-core = { workspace = true, features = ["test-support"] }
@@ -30,6 +30,7 @@ mk-imap = { workspace = true, optional = true, features = ["test-support"] }
 mk-parser.workspace = true
 mk-storage.workspace = true
 
+async-imap = { workspace = true, optional = true }
 async-trait.workspace = true
 bytes.workspace = true
 chrono.workspace = true
@@ -42,6 +43,7 @@ tempfile.workspace = true
 testcontainers = { workspace = true, optional = true }
 tokio.workspace = true
 tokio-graceful-shutdown.workspace = true
+tokio-rustls = { workspace = true, optional = true }
 
 [lints]
 workspace = true

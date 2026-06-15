@@ -1,4 +1,4 @@
-#[cfg(feature = "sqlite")]
+#[cfg(any(feature = "sqlite", feature = "greenmail"))]
 mod context;
 
 #[cfg(feature = "sqlite")]
@@ -15,6 +15,9 @@ mod ingest;
 
 #[cfg(feature = "greenmail")]
 mod greenmail;
+
+#[cfg(feature = "greenmail")]
+mod imap_sync;
 
 #[cfg(feature = "sqlite")]
 pub(crate) use sqlite::setup;
