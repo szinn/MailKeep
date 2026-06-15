@@ -55,7 +55,7 @@ pub async fn run(args: ImapArgs) -> anyhow::Result<()> {
     // Diagnostic path: call the port's folder-listing directly. The full
     // `ImapAccountService` now requires account/folder/cipher services that this
     // database-free command does not have.
-    let imap_port: Arc<dyn ImapPort> = Arc::new(mk_imap::ImapAdapter::new());
+    let imap_port: Arc<dyn ImapPort> = Arc::new(mk_imap::ImapAdapter::probe());
 
     let folders = match imap_port.list_folders(&server, &credentials).await {
         Ok(folders) => folders,

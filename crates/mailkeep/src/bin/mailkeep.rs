@@ -63,7 +63,9 @@ async fn cmd_server(config: mailkeep::config::Config) -> anyhow::Result<()> {
         .cipher_service(cipher_service)
         .raw_storage_service(storage_service.raw_storage_service)
         .attachment_storage_service(storage_service.attachment_storage_service)
-        .imap_port_factory(mk_imap::create_imap_port_factory())
+        // TODO(MK-7 Task 6): read the poll interval from config
+        // (`config.imap_poll_interval_secs`) and start the ImapSubsystem.
+        .imap_port_factory(mk_imap::create_imap_port_factory(Duration::from_secs(300)))
         .job_concurrency(config.job_concurrency)
         .build()
         .context("ExternalServices missing required field")?;

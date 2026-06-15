@@ -4160,12 +4160,16 @@ version = "0.1.0"
 dependencies = [
  "async-imap",
  "async-trait",
+ "bytes",
+ "chrono",
  "futures",
  "mk-core",
  "rustls",
  "secrecy",
  "tokio",
+ "tokio-graceful-shutdown",
  "tokio-rustls",
+ "tokio-util",
  "tracing",
  "webpki-roots 1.0.7",
 ]
