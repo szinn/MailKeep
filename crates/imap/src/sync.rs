@@ -325,7 +325,8 @@ pub(crate) async fn sync_folder(
         .ok_or_else(|| Error::Infrastructure(format!("server returned no UIDVALIDITY for {}", folder.path)))?;
 
     // UIDVALIDITY rollover: if the server's value changed, the old UIDs are
-    // meaningless. Reset the cursor (full cleanup is Task 5).
+    // meaningless. `handle_uidvalidity_change` resets the cursor and drops the
+    // stale message locations; restart this pass from UID 1.
     let mut last_uid = folder.last_uid;
     if let Some(known) = folder.uidvalidity
         && known != server_uidvalidity
@@ -404,24 +405,38 @@ pub(crate) async fn sync_folder(
     Ok((high, server_uidvalidity))
 }
 
-/// UIDVALIDITY rollover handling.
+/// UIDVALIDITY rollover handling: a safe-ordered cleanup invoked from every
+/// SELECT path (poll and IDLE) whenever the server's UIDVALIDITY differs from
+/// the one we last recorded for this folder.
 ///
-/// Task 2 only needs detection + cursor reset so a fresh first-sync works. The
-/// full safe-ordered cleanup (drop stale locations) lands in Task 5; the call
-/// to `messages` is kept here to keep the signature stable for that task.
-// TODO(MK-7 Task 5): implement the full transactional rollover cleanup.
+/// **Ordering matters.** We reset the folder cursor *first*
+/// (`record_sync_progress(.., new_uidvalidity, 0, ..)`), then drop the
+/// now-stale message locations. If the process crashes between the two steps,
+/// `last_uid` is already `0`, so the next pass simply re-fetches everything
+/// from UID 1 and re-upserts locations idempotently — no harm done. The reverse
+/// order would be unsafe: a crash after deleting locations but before resetting
+/// the cursor would leave `last_uid` high with the locations gone, so those
+/// messages would be skipped on the next pass and the archive view would lose
+/// their locations.
+///
+/// Only `message_locations` rows are dropped; the `Message`/attachment rows are
+/// untouched, and re-ingest is idempotent. The end-to-end rollover behaviour is
+/// proven against greenmail in Task 7.
 pub(crate) async fn handle_uidvalidity_change(
     folder_id: FolderId,
     new_uidvalidity: u32,
     folders: &Arc<dyn FolderService>,
     messages: &Arc<dyn MessageService>,
 ) -> Result<(), Error> {
-    let _ = messages; // wired in Task 5
+    // Safe order: reset the cursor first (a crash here just re-fetches all and
+    // re-upserts locations idempotently), then drop the stale locations.
     folders.record_sync_progress(folder_id, new_uidvalidity, 0, Utc::now()).await?;
+    let dropped = messages.delete_locations_for_folder(folder_id).await?;
     tracing::info!(
         folder_id,
         new_uidvalidity,
-        "UIDVALIDITY rollover detected: cursor reset (cleanup deferred to Task 5)"
+        dropped,
+        "UIDVALIDITY rollover: reset cursor, dropped stale locations"
     );
     Ok(())
 }
