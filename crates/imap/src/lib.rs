@@ -6,6 +6,7 @@
 mod adapter;
 mod connect;
 mod probe;
+mod subsystem;
 mod sync;
 
 use std::{sync::Arc, time::Duration};
@@ -13,6 +14,7 @@ use std::{sync::Arc, time::Duration};
 pub use adapter::ImapAdapter;
 pub use connect::production_client_config;
 use mk_core::imap::{ImapPort, ImapPortFactory};
+pub use subsystem::{ImapSubsystem, create_imap_subsystem};
 
 /// Factory consumed by `mk_core`'s external-services wiring. The
 /// `poll_interval` is baked into the closure here (per the MK-7 wiring
