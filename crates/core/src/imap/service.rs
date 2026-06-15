@@ -110,10 +110,7 @@ impl ImapAccountServiceImpl {
             }
             Err(e) => {
                 // Best-effort: record the failure; do not mask the original error.
-                self.account_service
-                    .set_status(account.id, AccountStatus::Error, Some(e.to_string()))
-                    .await
-                    .ok();
+                let _ = self.account_service.set_status(account.id, AccountStatus::Error, Some(e.to_string())).await;
                 Err(e)
             }
         }
@@ -174,9 +171,8 @@ impl ImapAccountService for ImapAccountServiceImpl {
     async fn reconcile_statuses(&self) -> Result<(), Error> {
         let accounts = self.account_service.list_enabled().await?;
         for account in accounts {
-            let live = match self.port.status(account.id).await {
-                Ok(s) => s,
-                Err(_) => continue, // untracked / not running
+            let Ok(live) = self.port.status(account.id).await else {
+                continue; // untracked / not running
             };
             let desired = match live.state {
                 SyncState::Error => AccountStatus::Error,
@@ -185,7 +181,7 @@ impl ImapAccountService for ImapAccountServiceImpl {
                 SyncState::NotRunning => continue,
             };
             if account.status != desired {
-                self.account_service.set_status(account.id, desired, live.last_error.clone()).await.ok();
+                let _ = self.account_service.set_status(account.id, desired, live.last_error.clone()).await;
             }
         }
         Ok(())
@@ -194,12 +190,9 @@ impl ImapAccountService for ImapAccountServiceImpl {
 
 #[cfg(test)]
 mod tests {
-    use secrecy::SecretString;
-
     use super::*;
     use crate::{
         account::{AccountBuilder, AccountToken, MockAccountService},
-        crypto::CipherService,
         folder::{FolderBuilder, FolderId, FolderToken, MockFolderService},
         imap::{model::TlsMode, port::MockImapPort},
         types::EmailAddress,
