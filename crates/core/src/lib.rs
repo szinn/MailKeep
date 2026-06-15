@@ -23,7 +23,7 @@ use crate::{
     auth::{AuthService, AuthServiceImpl},
     crypto::CipherService,
     folder::{FolderService, FolderServiceImpl},
-    imap::{ImapAccountService, ImapAccountServiceImpl, ImapPortFactory},
+    imap::{ImapAccountService, ImapPortFactory, create_imap_account_service},
     ingest::{IngestService, create_ingest_service},
     jobs::{JobService, create_job_service, create_job_worker_subsystem},
     message::{MessageService, MessageServiceImpl},
@@ -82,23 +82,26 @@ impl CoreServices {
         let (job_service, wake_notify) = create_job_service(repository_service.clone());
 
         let folder_service: Arc<dyn FolderService> = Arc::new(FolderServiceImpl::new(repository_service.clone()));
+        let message_service: Arc<dyn MessageService> = Arc::new(MessageServiceImpl::new(repository_service.clone()));
         let ingest_service = create_ingest_service(raw_storage_service.clone(), job_service.clone());
 
-        let imap_port = imap_port_factory(ingest_service.clone(), folder_service.clone());
-        let imap_account_service: Arc<dyn ImapAccountService> = Arc::new(ImapAccountServiceImpl::new(imap_port));
+        let account_service: Arc<dyn AccountService> = Arc::new(AccountServiceImpl::new(
+            repository_service.clone(),
+            cipher_service.clone(),
+            raw_storage_service.clone(),
+            attachment_storage_service.clone(),
+        ));
+
+        let imap_port = imap_port_factory(ingest_service.clone(), folder_service.clone(), message_service.clone());
+        let imap_account_service = create_imap_account_service(imap_port, account_service.clone(), folder_service.clone(), cipher_service.clone());
 
         Self {
-            account_service: Arc::new(AccountServiceImpl::new(
-                repository_service.clone(),
-                cipher_service.clone(),
-                raw_storage_service.clone(),
-                attachment_storage_service.clone(),
-            )),
+            account_service,
             auth_service: Arc::new(AuthServiceImpl::new(repository_service.clone())),
             user_service: Arc::new(UserServiceImpl::new(repository_service.clone())),
             user_setting_service: Arc::new(UserSettingServiceImpl::new(repository_service.clone())),
             folder_service,
-            message_service: Arc::new(MessageServiceImpl::new(repository_service.clone())),
+            message_service,
             ingest_service,
             imap_account_service,
             cipher_service,

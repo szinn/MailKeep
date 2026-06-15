@@ -9,6 +9,7 @@ use crate::{
     folder::FolderService,
     imap::{ImapConnectionParams, ImapCredentials, ImapPort, ImapServerConfig, RemoteFolder, SyncStatus},
     ingest::IngestService,
+    message::MessageService,
     storage::{AttachmentStorageService, RawStorageService},
     types::ContentHash,
 };
@@ -101,7 +102,7 @@ pub fn default_external_services_builder() -> ExternalServicesBuilder {
         .raw_storage_service(Arc::new(NopRawStorage) as Arc<dyn RawStorageService>)
         .attachment_storage_service(Arc::new(NopAttachmentStorage) as Arc<dyn AttachmentStorageService>)
         .job_concurrency(1)
-        .imap_port_factory(Box::new(|_ingest: Arc<dyn IngestService>, _folders: Arc<dyn FolderService>| {
-            Arc::new(NopImapPort) as Arc<dyn ImapPort>
-        }))
+        .imap_port_factory(Box::new(
+            |_ingest: Arc<dyn IngestService>, _folders: Arc<dyn FolderService>, _messages: Arc<dyn MessageService>| Arc::new(NopImapPort) as Arc<dyn ImapPort>,
+        ))
 }

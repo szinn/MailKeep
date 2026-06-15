@@ -4097,6 +4097,7 @@ dependencies = [
  "chacha20poly1305",
  "chrono",
  "derive_builder",
+ "futures",
  "hkdf 0.13.0",
  "insta",
  "mk-utils",

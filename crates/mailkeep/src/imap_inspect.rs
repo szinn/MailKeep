@@ -9,7 +9,7 @@ use std::sync::Arc;
 use anyhow::Context;
 use mk_core::{
     folder::SpecialUse,
-    imap::{ImapAccountService, ImapAccountServiceImpl, ImapCredentials, ImapPort, ImapServerConfig, RemoteFolder, TlsMode},
+    imap::{ImapCredentials, ImapPort, ImapServerConfig, RemoteFolder, TlsMode},
 };
 use secrecy::SecretString;
 
@@ -52,10 +52,12 @@ pub async fn run(args: ImapArgs) -> anyhow::Result<()> {
         password: SecretString::from(password),
     };
 
+    // Diagnostic path: call the port's folder-listing directly. The full
+    // `ImapAccountService` now requires account/folder/cipher services that this
+    // database-free command does not have.
     let imap_port: Arc<dyn ImapPort> = Arc::new(mk_imap::ImapAdapter::new());
-    let service = ImapAccountServiceImpl::new(imap_port);
 
-    let folders = match service.list_remote_folders(server, credentials).await {
+    let folders = match imap_port.list_folders(&server, &credentials).await {
         Ok(folders) => folders,
         Err(mk_core::Error::Validation(message)) => {
             anyhow::bail!("authentication failed ({message}) — Gmail and Fastmail require an app-specific password for IMAP");

@@ -6,3 +6,5 @@ pub use model::{Folder, FolderBuilder, FolderId, FolderToken, FolderTokenPrefix,
 pub use repository::{FolderRepository, NewFolderRow};
 pub use service::FolderService;
 pub(crate) use service::FolderServiceImpl;
+#[cfg(any(test, feature = "test-support"))]
+pub use service::MockFolderService;

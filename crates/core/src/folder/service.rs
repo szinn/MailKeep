@@ -13,6 +13,7 @@ use crate::{
     with_read_only_transaction, with_transaction,
 };
 
+#[cfg_attr(any(test, feature = "test-support"), mockall::automock)]
 #[async_trait::async_trait]
 pub trait FolderService: Send + Sync {
     async fn create_folders_for_account(&self, account_id: AccountId, requests: Vec<NewFolderRequest>) -> Result<Vec<Folder>, Error>;
