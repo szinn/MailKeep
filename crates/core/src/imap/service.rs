@@ -158,12 +158,16 @@ impl ImapAccountService for ImapAccountServiceImpl {
     }
 
     async fn stop_all(&self) -> Result<(), Error> {
+        use futures::stream::{self, StreamExt};
+
         let accounts = self.account_service.list_enabled().await?;
-        for account in accounts {
-            if let Err(e) = self.port.stop_account(account.id).await {
-                tracing::warn!(account_id = account.id, error = %e, "failed to stop account sync");
-            }
-        }
+        stream::iter(accounts)
+            .for_each_concurrent(4, |account| async move {
+                if let Err(e) = self.port.stop_account(account.id).await {
+                    tracing::warn!(account_id = account.id, error = %e, "failed to stop account sync");
+                }
+            })
+            .await;
         Ok(())
     }
 
