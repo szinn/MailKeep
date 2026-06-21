@@ -189,7 +189,10 @@ pub(crate) fn AccountAddPage() -> Element {
     // after a successful probe, so the user is prompted to re-test.
     use_effect(move || {
         let _ = (host(), port(), tls(), email(), password());
-        if picker_shown() {
+        // Read `picker_shown` untracked: it is a *condition* here, not a trigger.
+        // Subscribing to it would make a successful probe (which flips it true)
+        // immediately re-run this effect and falsely mark the picker stale.
+        if *picker_shown.peek() {
             picker_stale.set(true);
         }
     });
