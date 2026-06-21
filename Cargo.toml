@@ -79,7 +79,7 @@ axum_session_auth = { version = "0.20.0", default-features = false }
 dioxus = { version = "0.7.9", features = ["fullstack", "router"] }
 dioxus-server = { version = "0.7.9", features = ["router"] }
 tower = "0.5.3"
-tower-http = { version = "0.6.11", features = [
+tower-http = { version = "0.7.0", features = [
     "compression-full",
     "limit",
     "request-id",
