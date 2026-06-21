@@ -99,6 +99,13 @@ pub(crate) async fn register_admin(username: String, full_name: String, password
 /// Sets a new password for a user whose previous login required a password
 /// change. The `token` identifies the user; no current-password check applies
 /// because that credential was already validated by [`perform_login`].
+///
+/// Guarded by `change_password_on_login`: the endpoint only completes a
+/// *pending* forced change. A `UserToken` is the user's stable public
+/// identifier (it appears in the admin user list), not a secret — so without
+/// this guard a known token could reset an arbitrary account's password
+/// (bypassing the admin-action authorization rules in `users_section`).
+/// Rejecting users not in the forced-change state closes that.
 #[post(
     "/api/v1/auth/change_initial_password",
     core_services: axum::Extension<Arc<CoreServices>>,
@@ -114,6 +121,10 @@ async fn change_initial_password(token: String, new_password: String) -> Result<
         .await
         .map_err(to_server_err)?
         .ok_or_else(|| ServerFnError::new("User not found"))?;
+
+    if !user.change_password_on_login {
+        return Err(ServerFnError::new("Password change is not pending for this account"));
+    }
 
     let new_hash = User::encrypt_password(&new_password).map_err(to_server_err)?;
     core_services
