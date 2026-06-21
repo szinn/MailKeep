@@ -42,7 +42,7 @@ pub(crate) fn FolderPicker(tree: Signal<FolderTree>, dimmed: bool, on_toggle: Ev
             div { class: "flex items-center justify-between mb-2",
                 h3 { class: "text-sm font-semibold text-gray-900 dark:text-slate-100", "Folders to archive" }
                 div { class: "flex items-center gap-3 text-xs",
-                    span { class: "text-gray-500 dark:text-slate-400", "{count} selected" }
+                    span { class: "text-gray-500 dark:text-slate-400", "{t.nodes.len()} total · {count} selected" }
                     button {
                         class: "text-indigo-600 hover:underline dark:text-indigo-400",
                         r#type: "button",
