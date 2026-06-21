@@ -58,11 +58,13 @@ pub struct NewMessageAttachmentRow {
 #[async_trait::async_trait]
 #[cfg_attr(test, mockall::automock)]
 pub trait MessageRepository: Send + Sync {
-    async fn find_by_account_and_message_id(
+    /// Look up a message by its raw-content hash, the archiver's identity key.
+    /// Identical bytes are the same archived message regardless of Message-ID.
+    async fn find_by_account_and_content_hash(
         &self,
         transaction: &dyn Transaction,
         account_id: AccountId,
-        rfc822_message_id: &str,
+        content_hash: ContentHash,
     ) -> Result<Option<Message>, Error>;
 
     async fn create(&self, transaction: &dyn Transaction, new: NewMessageRow) -> Result<Message, Error>;

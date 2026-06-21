@@ -199,7 +199,9 @@ mod tests {
             token: MessageToken::generate(),
             account_id,
             rfc822_message_id: rfc_id.to_string(),
-            content_hash: ContentHash::compute(b"x"),
+            // Derive the hash from the (unique) id so distinct messages get
+            // distinct content hashes — identity is (account_id, content_hash).
+            content_hash: ContentHash::compute(rfc_id.as_bytes()),
             subject: None,
             from_address: EmailAddress::new("a@b.com").unwrap(),
             from_name: None,
