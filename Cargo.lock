@@ -4147,6 +4147,7 @@ dependencies = [
  "mk-core",
  "openidconnect",
  "rand 0.10.1",
+ "secrecy",
  "serde",
  "thiserror 2.0.18",
  "tokio",
