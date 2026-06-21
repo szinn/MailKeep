@@ -910,9 +910,9 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "bytes"
-version = "1.11.1"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
+checksum = "8ae3f5d315924270530207e2a68396c3cc547f6dca3fbdca317cfb1a51edb593"
 dependencies = [
  "serde",
 ]
@@ -1958,7 +1958,7 @@ dependencies = [
  "tokio-tungstenite 0.28.0",
  "tokio-util",
  "tower",
- "tower-http",
+ "tower-http 0.6.11",
  "tower-layer",
  "tracing",
  "tungstenite 0.27.0",
@@ -2236,7 +2236,7 @@ dependencies = [
  "tokio-tungstenite 0.28.0",
  "tokio-util",
  "tower",
- "tower-http",
+ "tower-http 0.6.11",
  "tracing",
  "tracing-futures",
  "url",
@@ -3501,6 +3501,7 @@ dependencies = [
 name = "integration-tests"
 version = "0.1.0"
 dependencies = [
+ "async-imap",
  "async-trait",
  "bytes",
  "chrono",
@@ -3518,6 +3519,7 @@ dependencies = [
  "testcontainers",
  "tokio",
  "tokio-graceful-shutdown",
+ "tokio-rustls",
 ]
 
 [[package]]
@@ -4097,6 +4099,7 @@ dependencies = [
  "chacha20poly1305",
  "chrono",
  "derive_builder",
+ "futures",
  "hkdf 0.13.0",
  "insta",
  "mk-utils",
@@ -4144,12 +4147,13 @@ dependencies = [
  "mk-core",
  "openidconnect",
  "rand 0.10.1",
+ "secrecy",
  "serde",
  "thiserror 2.0.18",
  "tokio",
  "tokio-graceful-shutdown",
  "tower",
- "tower-http",
+ "tower-http 0.7.0",
  "tracing",
 ]
 
@@ -4159,12 +4163,16 @@ version = "0.1.0"
 dependencies = [
  "async-imap",
  "async-trait",
+ "bytes",
+ "chrono",
  "futures",
  "mk-core",
  "rustls",
  "secrecy",
  "tokio",
+ "tokio-graceful-shutdown",
  "tokio-rustls",
+ "tokio-util",
  "tracing",
  "webpki-roots 1.0.8",
 ]
@@ -5250,7 +5258,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-util",
  "tower",
- "tower-http",
+ "tower-http 0.6.11",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -6868,7 +6876,6 @@ version = "0.6.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4cfcf7e2740e6fc6d4d688b4ef00650406bb94adf4731e43c096c3a19fe40840"
 dependencies = [
- "async-compression",
  "bitflags 2.11.1",
  "bytes",
  "futures-core",
@@ -6887,8 +6894,29 @@ dependencies = [
  "tower",
  "tower-layer",
  "tower-service",
- "tracing",
  "url",
+]
+
+[[package]]
+name = "tower-http"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b11f75e912b0c2be01b63d8cf8057b8c3f97cf34abb3d431a3a4c8675498e233"
+dependencies = [
+ "async-compression",
+ "bitflags 2.11.1",
+ "bytes",
+ "futures-core",
+ "http",
+ "http-body",
+ "http-body-util",
+ "percent-encoding",
+ "pin-project-lite",
+ "tokio",
+ "tokio-util",
+ "tower-layer",
+ "tower-service",
+ "tracing",
  "uuid",
 ]
 

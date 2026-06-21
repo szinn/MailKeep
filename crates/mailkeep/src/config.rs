@@ -16,10 +16,18 @@ pub struct Config {
     pub oidc: OidcConfig,
     #[serde(default = "default_job_concurrency")]
     pub job_concurrency: usize,
+    /// Interval (seconds) between IMAP poll passes over non-IDLE folders.
+    /// Env: `MAILKEEP__IMAP_POLL_INTERVAL_SECS`.
+    #[serde(default = "default_imap_poll_interval_secs")]
+    pub imap_poll_interval_secs: u64,
 }
 
 fn default_job_concurrency() -> usize {
     1
+}
+
+fn default_imap_poll_interval_secs() -> u64 {
+    300
 }
 
 impl Config {

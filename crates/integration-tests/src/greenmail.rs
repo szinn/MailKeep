@@ -93,7 +93,10 @@ fn insecure_adapter() -> ImapAdapter {
         .dangerous()
         .with_custom_certificate_verifier(Arc::new(danger::NoVerify))
         .with_no_client_auth();
-    ImapAdapter::with_tls_config(Arc::new(config))
+    // Task 2: the harness only exercises connectivity/LIST, so nop sync services
+    // suffice. MK-7 Task 7 will switch to `with_tls_config` with real services
+    // for end-to-end sync assertions.
+    ImapAdapter::probe_with_tls_config(Arc::new(config))
 }
 
 fn creds(password: &str) -> ImapCredentials {

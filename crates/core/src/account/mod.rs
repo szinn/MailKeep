@@ -5,4 +5,6 @@ pub mod service;
 pub use model::{Account, AccountBuilder, AccountId, AccountStatus, AccountToken, AccountTokenPrefix, Credentials, NewAccount, PartialAccountUpdate};
 pub use repository::AccountRepository;
 pub(crate) use service::AccountServiceImpl;
+#[cfg(any(test, feature = "test-support"))]
+pub use service::MockAccountService;
 pub use service::{AccountService, CreateAccountParams, PartialAccountInput};

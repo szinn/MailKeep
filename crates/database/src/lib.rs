@@ -56,6 +56,15 @@ pub async fn open_database(database_path: &str) -> Result<DatabaseConnection, Er
     // sqlx-sqlite's URL parser only recognises mode/cache/immutable/vfs —
     // pragma names are not valid query parameters and will cause a parse error.
     if database_path.starts_with("sqlite:") {
+        // SQLite permits only one writer at a time. With a multi-connection pool,
+        // the read→write transaction pattern (claim a job, then write) hits
+        // SQLITE_BUSY/BUSY_SNAPSHOT deadlocks that `busy_timeout` cannot resolve —
+        // a stale snapshot fails immediately rather than waiting. Serialize all
+        // access through a single connection: correct and ample for an embedded,
+        // single-process archiver. (WAL + synchronous=NORMAL are still set below
+        // for crash-safety and durability.)
+        opt.max_connections(1).min_connections(1);
+
         opt.map_sqlx_sqlite_opts(|o| {
             use std::time::Duration;
 

@@ -59,14 +59,12 @@ impl MessageService for MessageServiceImpl {
         parsed: ParsedMessage,
     ) -> Result<RecordedMessage, Error> {
         with_transaction!(self, message_repository, message_location_repository, message_attachment_repository, |tx| {
-            let existing = message_repository
-                .find_by_account_and_message_id(tx, account_id, &parsed.rfc822_message_id)
-                .await?;
+            // Identity is the raw-content hash: identical bytes are the same
+            // archived message (dedup), even if the Message-ID differs; distinct
+            // bytes are distinct messages even when the Message-ID matches.
+            let existing = message_repository.find_by_account_and_content_hash(tx, account_id, parsed.content_hash).await?;
 
             let (message_id, created) = if let Some(existing) = existing {
-                if existing.content_hash != parsed.content_hash {
-                    return Err(Error::RepositoryError(RepositoryError::Conflict));
-                }
                 (existing.id, false)
             } else {
                 let new_message_row = NewMessageRow {
@@ -89,35 +87,39 @@ impl MessageService for MessageServiceImpl {
                     has_attachments: !parsed.attachments.is_empty(),
                     attachment_count: i32::try_from(parsed.attachments.len()).unwrap_or(i32::MAX),
                 };
-                let message = match message_repository.create(tx, new_message_row).await {
-                    Ok(m) => m,
-                    // Concurrent insert race: the adapter maps unique violations to
-                    // `RepositoryError::Constraint`. Translate to Conflict so callers
-                    // see a clean semantic instead of a low-level constraint error.
+                match message_repository.create(tx, new_message_row).await {
+                    Ok(message) => {
+                        let attachment_rows: Vec<NewMessageAttachmentRow> = parsed
+                            .attachments
+                            .iter()
+                            .map(|a| NewMessageAttachmentRow {
+                                token: MessageAttachmentToken::generate(),
+                                message_id: message.id,
+                                account_id,
+                                content_hash: a.content_hash,
+                                filename: a.filename.clone(),
+                                content_type: a.content_type.clone(),
+                                size_bytes: a.size_bytes,
+                                is_inline: a.is_inline,
+                                content_id: a.content_id.clone(),
+                            })
+                            .collect();
+                        message_attachment_repository.create_many(tx, attachment_rows).await?;
+
+                        (message.id, true)
+                    }
+                    // Concurrent insert race on the (account_id, content_hash) unique
+                    // index: another worker archived this exact content (and its
+                    // attachments) first. Dedup to the winner rather than failing.
                     Err(Error::RepositoryError(RepositoryError::Constraint(_))) => {
-                        return Err(Error::RepositoryError(RepositoryError::Conflict));
+                        let winner = message_repository
+                            .find_by_account_and_content_hash(tx, account_id, parsed.content_hash)
+                            .await?
+                            .ok_or(Error::RepositoryError(RepositoryError::Conflict))?;
+                        (winner.id, false)
                     }
                     Err(e) => return Err(e),
-                };
-
-                let attachment_rows: Vec<NewMessageAttachmentRow> = parsed
-                    .attachments
-                    .iter()
-                    .map(|a| NewMessageAttachmentRow {
-                        token: MessageAttachmentToken::generate(),
-                        message_id: message.id,
-                        account_id,
-                        content_hash: a.content_hash,
-                        filename: a.filename.clone(),
-                        content_type: a.content_type.clone(),
-                        size_bytes: a.size_bytes,
-                        is_inline: a.is_inline,
-                        content_id: a.content_id.clone(),
-                    })
-                    .collect();
-                message_attachment_repository.create_many(tx, attachment_rows).await?;
-
-                (message.id, true)
+                }
             };
 
             let location_row = NewMessageLocationRow {
@@ -184,10 +186,6 @@ mod tests {
 
     fn sample_content_hash() -> ContentHash {
         ContentHash::from_hex("a".repeat(64)).unwrap()
-    }
-
-    fn other_content_hash() -> ContentHash {
-        ContentHash::from_hex("b".repeat(64)).unwrap()
     }
 
     fn attachment_content_hash() -> ContentHash {
@@ -322,7 +320,7 @@ mod tests {
         let mut attachment_repo = MockMessageAttachmentRepository::new();
 
         message_repo
-            .expect_find_by_account_and_message_id()
+            .expect_find_by_account_and_content_hash()
             .times(1)
             .returning(|_, _, _| Box::pin(async { Ok(None) }));
         message_repo
@@ -372,10 +370,10 @@ mod tests {
         let attachment_repo = MockMessageAttachmentRepository::new();
 
         let hash = sample_content_hash();
-        message_repo.expect_find_by_account_and_message_id().times(1).returning(move |_, _, msg_id| {
-            let id = msg_id.to_string();
-            Box::pin(async move { Ok(Some(make_existing_message(99, 1, id, hash))) })
-        });
+        message_repo
+            .expect_find_by_account_and_content_hash()
+            .times(1)
+            .returning(move |_, _, _| Box::pin(async move { Ok(Some(make_existing_message(99, 1, "<abc@example.com>".into(), hash))) }));
         // No create, no create_many: assert by leaving no
         // expect_create/expect_create_many.
         location_repo
@@ -395,26 +393,39 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn record_parsed_message_collision_different_hash_returns_conflict() {
+    async fn record_parsed_message_same_msgid_different_content_archives_both() {
+        // A second email shares an existing Message-ID but has different raw bytes.
+        // Identity is the content hash, so the lookup misses and the message is
+        // archived as a distinct row rather than rejected as a conflict.
         let mut message_repo = MockMessageRepository::new();
-        let location_repo = MockMessageLocationRepository::new();
-        let attachment_repo = MockMessageAttachmentRepository::new();
+        let mut location_repo = MockMessageLocationRepository::new();
+        let mut attachment_repo = MockMessageAttachmentRepository::new();
 
-        let other = other_content_hash();
-        message_repo.expect_find_by_account_and_message_id().times(1).returning(move |_, _, msg_id| {
-            let id = msg_id.to_string();
-            Box::pin(async move { Ok(Some(make_existing_message(77, 1, id, other))) })
-        });
-        // No expect_create / expect_create_many / expect_upsert configured — mockall
-        // will fail the test if any of them is invoked.
+        message_repo
+            .expect_find_by_account_and_content_hash()
+            .times(1)
+            .returning(|_, _, _| Box::pin(async { Ok(None) }));
+        message_repo
+            .expect_create()
+            .times(1)
+            .returning(|_, row| Box::pin(async move { Ok(make_message(88, row)) }));
+        attachment_repo
+            .expect_create_many()
+            .times(1)
+            .returning(|_, rows| Box::pin(async move { Ok(rows.into_iter().map(make_attachment).collect()) }));
+        location_repo
+            .expect_upsert()
+            .times(1)
+            .returning(|_, row| Box::pin(async move { Ok(make_location(row)) }));
 
         let svc = setup_message_service(message_repo, location_repo, attachment_repo);
-        let err = svc
+        let result = svc
             .record_parsed_message(1, 2, 100, 1000, Utc::now(), MessageFlags::default(), sample_parsed_message())
             .await
-            .expect_err("should return conflict");
+            .unwrap();
 
-        assert!(matches!(err, Error::RepositoryError(RepositoryError::Conflict)), "got {err:?}");
+        assert!(result.created);
+        assert_eq!(result.message_id, 88);
     }
 
     #[tokio::test]
@@ -429,11 +440,16 @@ mod tests {
         // id=55).
         let hash = sample_content_hash();
         let mut call_count = 0;
-        message_repo.expect_find_by_account_and_message_id().times(2).returning(move |_, _, msg_id| {
+        message_repo.expect_find_by_account_and_content_hash().times(2).returning(move |_, _, _| {
             call_count += 1;
-            let id = msg_id.to_string();
             let n = call_count;
-            Box::pin(async move { if n == 1 { Ok(None) } else { Ok(Some(make_existing_message(55, 1, id, hash))) } })
+            Box::pin(async move {
+                if n == 1 {
+                    Ok(None)
+                } else {
+                    Ok(Some(make_existing_message(55, 1, "<abc@example.com>".into(), hash)))
+                }
+            })
         });
         // Create called exactly once (only first call, fresh path).
         message_repo
@@ -470,31 +486,50 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn record_parsed_message_concurrent_insert_maps_to_conflict() {
+    async fn record_parsed_message_concurrent_insert_dedups_to_winner() {
+        // Two workers insert the same content concurrently. The loser hits the
+        // (account_id, content_hash) unique constraint; the service re-fetches the
+        // winner and dedups to it (created=false), recording only the location —
+        // it does not fail or re-create attachments.
         let mut message_repo = MockMessageRepository::new();
-        let location_repo = MockMessageLocationRepository::new();
+        let mut location_repo = MockMessageLocationRepository::new();
         let attachment_repo = MockMessageAttachmentRepository::new();
 
-        message_repo
-            .expect_find_by_account_and_message_id()
-            .times(1)
-            .returning(|_, _, _| Box::pin(async { Ok(None) }));
+        let hash = sample_content_hash();
+        let mut find_calls = 0;
+        message_repo.expect_find_by_account_and_content_hash().times(2).returning(move |_, _, _| {
+            find_calls += 1;
+            let n = find_calls;
+            Box::pin(async move {
+                if n == 1 {
+                    Ok(None)
+                } else {
+                    Ok(Some(make_existing_message(66, 1, "<abc@example.com>".into(), hash)))
+                }
+            })
+        });
         message_repo.expect_create().times(1).returning(|_, _| {
             Box::pin(async {
                 Err(Error::RepositoryError(RepositoryError::Constraint(
-                    "unique violation on (account_id, rfc822_message_id)".into(),
+                    "unique violation on (account_id, content_hash)".into(),
                 )))
             })
         });
-        // No upsert / create_many expected — service must short-circuit before either.
+        // create_many must NOT be called on the dedup path.
+        location_repo
+            .expect_upsert()
+            .withf(|_, row: &NewMessageLocationRow| row.message_id == 66)
+            .times(1)
+            .returning(|_, row| Box::pin(async move { Ok(make_location(row)) }));
 
         let svc = setup_message_service(message_repo, location_repo, attachment_repo);
-        let err = svc
+        let result = svc
             .record_parsed_message(1, 2, 100, 1000, Utc::now(), MessageFlags::default(), sample_parsed_message())
             .await
-            .expect_err("should map constraint to conflict");
+            .unwrap();
 
-        assert!(matches!(err, Error::RepositoryError(RepositoryError::Conflict)), "got {err:?}");
+        assert!(!result.created);
+        assert_eq!(result.message_id, 66);
     }
 
     #[tokio::test]

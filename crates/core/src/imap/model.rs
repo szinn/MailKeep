@@ -61,6 +61,10 @@ pub struct RemoteFolder {
     pub special_use: Option<SpecialUse>,
     pub has_children: bool,
     pub no_select: bool,
+    /// Server-reported hierarchy delimiter for this entry (e.g. `/` or `.`).
+    /// `None` for flat mailboxes. Used by the frontend to build the folder
+    /// tree.
+    pub delimiter: Option<String>,
 }
 
 /// Live sync status. Defined now, exercised in MK-7.

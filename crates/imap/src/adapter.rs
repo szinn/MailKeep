@@ -1,8 +1,9 @@
 //! [`ImapPort`] implementation. MK-6 ships `test_connection` and
-//! `list_folders`; the lifecycle methods return [`Error::Unimplemented`] until
-//! MK-7.
+//! `list_folders`; MK-7 (this task) adds the per-account sync lifecycle:
+//! `start_account` spawns a background task that connects, SELECTs, and
+//! fetches; `stop_account` cancels and drains it; `status` reports live health.
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use async_imap::types::{Name, NameAttribute};
 use async_trait::async_trait;
@@ -10,41 +11,111 @@ use futures::StreamExt;
 use mk_core::{
     Error,
     account::AccountId,
+    folder::FolderService,
     imap::{ImapConnectionParams, ImapCredentials, ImapPort, ImapServerConfig, RemoteFolder, SyncStatus, special_use_from_attributes},
+    ingest::IngestService,
+    message::MessageService,
 };
 use rustls::ClientConfig;
+use tokio::{sync::Mutex, task::JoinSet};
+use tokio_util::sync::CancellationToken;
 
-use crate::connect::{connect_and_login, production_client_config};
+use crate::{
+    connect::{connect_and_login, production_client_config},
+    sync::{AccountHandle, idle_task, initial_status, not_running_status, poll_task},
+};
 
 /// Production IMAP adapter over async-imap + tokio-rustls.
-#[derive(Debug)]
+///
+/// Owns the long-lived per-account sync tasks and calls back into the injected
+/// core services. It deliberately holds service trait objects (not `database`,
+/// `crypto`, or `storage`) so the hexagonal boundary is preserved.
 pub struct ImapAdapter {
     tls_config: Arc<ClientConfig>,
+    ingest_service: Arc<dyn IngestService>,
+    folder_service: Arc<dyn FolderService>,
+    message_service: Arc<dyn MessageService>,
+    // Interval between poll passes over the non-IDLE folders.
+    poll_interval: Duration,
+    tracked: Mutex<HashMap<AccountId, AccountHandle>>,
 }
 
 impl ImapAdapter {
-    /// Build the adapter with the production rustls config (webpki roots).
+    /// Build the adapter with the production rustls config (webpki roots) and
+    /// the injected core services.
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(
+        ingest_service: Arc<dyn IngestService>,
+        folder_service: Arc<dyn FolderService>,
+        message_service: Arc<dyn MessageService>,
+        poll_interval: Duration,
+    ) -> Self {
         Self {
             tls_config: production_client_config(),
+            ingest_service,
+            folder_service,
+            message_service,
+            poll_interval,
+            tracked: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Probe-only constructor for the `mailkeep imap` diagnostic command, which
+    /// uses only `test_connection`/`list_folders` (no sync services). Backed by
+    /// nop services that panic if a sync method is reached. Never wire this
+    /// into production sync.
+    #[must_use]
+    pub fn probe() -> Self {
+        let (ingest_service, folder_service, message_service) = crate::probe::nop_services();
+        Self {
+            tls_config: production_client_config(),
+            ingest_service,
+            folder_service,
+            message_service,
+            poll_interval: Duration::from_secs(300),
+            tracked: Mutex::new(HashMap::new()),
         }
     }
 
     /// Test-only constructor that injects a custom rustls config (e.g. one that
-    /// trusts a self-signed greenmail cert). Gated behind `test-support` so
-    /// production builds cannot accidentally weaken trust. Used by the
-    /// greenmail integration tests in the integration-tests crate.
+    /// trusts a self-signed greenmail cert) plus the sync services. Gated
+    /// behind `test-support` so production builds cannot accidentally
+    /// weaken trust. Used by the full-sync greenmail integration tests
+    /// (MK-7 Task 7).
     #[cfg(feature = "test-support")]
     #[must_use]
-    pub fn with_tls_config(tls_config: Arc<ClientConfig>) -> Self {
-        Self { tls_config }
+    pub fn with_tls_config(
+        ingest_service: Arc<dyn IngestService>,
+        folder_service: Arc<dyn FolderService>,
+        message_service: Arc<dyn MessageService>,
+        poll_interval: Duration,
+        tls_config: Arc<ClientConfig>,
+    ) -> Self {
+        Self {
+            tls_config,
+            ingest_service,
+            folder_service,
+            message_service,
+            poll_interval,
+            tracked: Mutex::new(HashMap::new()),
+        }
     }
-}
 
-impl Default for ImapAdapter {
-    fn default() -> Self {
-        Self::new()
+    /// Test-only probe constructor that injects a custom rustls config but uses
+    /// nop sync services. For connectivity/LIST tests that never drive the sync
+    /// lifecycle (e.g. the greenmail harness probe).
+    #[cfg(feature = "test-support")]
+    #[must_use]
+    pub fn probe_with_tls_config(tls_config: Arc<ClientConfig>) -> Self {
+        let (ingest_service, folder_service, message_service) = crate::probe::nop_services();
+        Self {
+            tls_config,
+            ingest_service,
+            folder_service,
+            message_service,
+            poll_interval: Duration::from_secs(300),
+            tracked: Mutex::new(HashMap::new()),
+        }
     }
 }
 
@@ -83,6 +154,7 @@ fn remote_folder_from_name(name: &Name) -> RemoteFolder {
         special_use: special_use_from_attributes(&path, &attrs),
         no_select: attrs.iter().any(|a| a == "noselect"),
         has_children: attrs.iter().any(|a| a == "haschildren"),
+        delimiter: name.delimiter().map(str::to_string),
         path,
     }
 }
@@ -121,16 +193,101 @@ impl ImapPort for ImapAdapter {
         Ok(out)
     }
 
-    async fn start_account(&self, _account_id: AccountId, _params: ImapConnectionParams) -> Result<(), Error> {
-        Err(Error::Unimplemented("ImapAdapter::start_account (MK-7)"))
+    async fn start_account(&self, account_id: AccountId, params: ImapConnectionParams) -> Result<(), Error> {
+        // Restart-idempotent: tear down any existing task before spawning a new one.
+        let _ = self.stop_account(account_id).await;
+
+        let cancel = CancellationToken::new();
+        let status = Arc::new(Mutex::new(initial_status()));
+        let mut tasks = JoinSet::new();
+
+        // Partition the enabled folders into the single `idle_enabled` folder
+        // (owned by the dedicated IDLE task on connection #1) and the rest (the
+        // poll set on connection #2). At most one folder is IDLE-enabled; if a
+        // server somehow advertises more, the extras fall back to the poll set
+        // so they still get synced.
+        let (idle_folders, poll_folders): (Vec<_>, Vec<_>) = params.folders.iter().cloned().partition(|f| f.idle_enabled);
+        let mut idle_folders = idle_folders.into_iter();
+        let idle_folder = idle_folders.next();
+        // Any surplus IDLE-enabled folders join the poll set.
+        let poll_folders: Vec<_> = poll_folders.into_iter().chain(idle_folders).collect();
+
+        // Spawn the dedicated IDLE task for the single idle folder, if any.
+        if let Some(idle_folder) = idle_folder {
+            let ingest = self.ingest_service.clone();
+            let folders = self.folder_service.clone();
+            let messages = self.message_service.clone();
+            let tls = self.tls_config.clone();
+            let server = params.server.clone();
+            let creds = params.credentials.clone();
+            let status_for_task = status.clone();
+            let cancel_for_task = cancel.clone();
+            tasks.spawn(async move {
+                idle_task(
+                    account_id,
+                    server,
+                    creds,
+                    idle_folder,
+                    ingest,
+                    folders,
+                    messages,
+                    tls,
+                    status_for_task,
+                    cancel_for_task,
+                )
+                .await;
+            });
+        }
+
+        // Spawn the poll task for the non-idle folders, if any. `poll_task`
+        // returns immediately on an empty set, but skip the spawn to avoid
+        // spawning a task that immediately returns.
+        if !poll_folders.is_empty() {
+            let ingest = self.ingest_service.clone();
+            let folders = self.folder_service.clone();
+            let messages = self.message_service.clone();
+            let tls = self.tls_config.clone();
+            let poll_interval = self.poll_interval;
+            let server = params.server.clone();
+            let creds = params.credentials.clone();
+            let status_for_task = status.clone();
+            let cancel_for_task = cancel.clone();
+            tasks.spawn(async move {
+                poll_task(
+                    account_id,
+                    server,
+                    creds,
+                    poll_folders,
+                    poll_interval,
+                    ingest,
+                    folders,
+                    messages,
+                    tls,
+                    status_for_task,
+                    cancel_for_task,
+                )
+                .await;
+            });
+        }
+
+        self.tracked.lock().await.insert(account_id, AccountHandle { cancel, tasks, status });
+        Ok(())
     }
 
-    async fn stop_account(&self, _account_id: AccountId) -> Result<(), Error> {
-        Err(Error::Unimplemented("ImapAdapter::stop_account (MK-7)"))
+    async fn stop_account(&self, account_id: AccountId) -> Result<(), Error> {
+        let handle = self.tracked.lock().await.remove(&account_id);
+        if let Some(mut handle) = handle {
+            handle.cancel.cancel();
+            while handle.tasks.join_next().await.is_some() {}
+        }
+        Ok(())
     }
 
-    async fn status(&self, _account_id: AccountId) -> Result<SyncStatus, Error> {
-        Err(Error::Unimplemented("ImapAdapter::status (MK-7)"))
+    async fn status(&self, account_id: AccountId) -> Result<SyncStatus, Error> {
+        match self.tracked.lock().await.get(&account_id) {
+            Some(handle) => Ok(handle.status.lock().await.clone()),
+            None => Ok(not_running_status()),
+        }
     }
 }
 

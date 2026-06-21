@@ -56,11 +56,11 @@ impl MessageRepositoryAdapter {
 
 #[async_trait::async_trait]
 impl MessageRepository for MessageRepositoryAdapter {
-    async fn find_by_account_and_message_id(
+    async fn find_by_account_and_content_hash(
         &self,
         transaction: &dyn Transaction,
         account_id: AccountId,
-        rfc822_message_id: &str,
+        content_hash: ContentHash,
     ) -> Result<Option<Message>, Error> {
         if account_id == 0 {
             return Err(Error::InvalidId(account_id));
@@ -68,7 +68,7 @@ impl MessageRepository for MessageRepositoryAdapter {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
         Ok(prelude::Messages::find()
             .filter(messages::Column::AccountId.eq(account_id as i64))
-            .filter(messages::Column::Rfc822MessageId.eq(rfc822_message_id))
+            .filter(messages::Column::ContentHash.eq(content_hash.as_hex()))
             .one(transaction)
             .await
             .map_err(handle_dberr)?
@@ -206,7 +206,9 @@ mod tests {
             token: MessageToken::generate(),
             account_id,
             rfc822_message_id: rfc822_id.to_string(),
-            content_hash: ContentHash::compute(b"hello"),
+            // Derive the hash from the (unique) id so distinct rows get distinct
+            // content hashes — identity is now (account_id, content_hash).
+            content_hash: ContentHash::compute(rfc822_id.as_bytes()),
             subject: Some("Hello".into()),
             from_address: EmailAddress::new("alice@example.com").unwrap(),
             from_name: Some("Alice".into()),
@@ -228,7 +230,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn create_and_find_by_account_and_message_id() {
+    async fn create_and_find_by_account_and_content_hash() {
         let svc = setup().await;
         let user_id = make_user(&svc, "alice", "alice@example.com").await;
         let account_id = make_account(&svc, user_id, "example.com").await;
@@ -245,7 +247,7 @@ mod tests {
 
         let found = svc
             .message_repository()
-            .find_by_account_and_message_id(&*tx, account_id, "<msg-1@example.com>")
+            .find_by_account_and_content_hash(&*tx, account_id, ContentHash::compute(b"<msg-1@example.com>"))
             .await
             .unwrap()
             .unwrap();
@@ -254,12 +256,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unique_account_message_id_constraint() {
+    async fn unique_account_content_hash_constraint() {
         let svc = setup().await;
         let user_id = make_user(&svc, "alice", "alice@example.com").await;
         let account_id = make_account(&svc, user_id, "example.com").await;
         let tx = svc.repository().begin().await.unwrap();
 
+        // Two rows with identical content (new_row derives the hash from the id).
         let row = new_row(account_id, "<dup@example.com>");
         svc.message_repository().create(&*tx, row).await.unwrap();
 

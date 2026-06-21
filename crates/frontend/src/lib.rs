@@ -139,7 +139,7 @@ pub use error::FrontendError;
 pub mod server;
 
 use components::AppLayout;
-use routes::{HomePage, LandingPage, ProfilePage, SettingsPage};
+use routes::{AccountAddPage, HomePage, LandingPage, ProfilePage, SettingsPage};
 use serde::Deserialize;
 
 #[derive(Routable, Clone, Debug, PartialEq)]
@@ -150,6 +150,8 @@ enum Route {
     #[layout(AppLayout)]
         #[route("/")]
         HomePage,
+        #[route("/accounts/new")]
+        AccountAddPage,
         #[route("/settings")]
         SettingsPage,
         #[route("/profile")]
@@ -158,7 +160,19 @@ enum Route {
 
 #[component]
 fn MailKeepFrontend() -> Element {
-    rsx! { Router::<Route> {} }
+    // Anti-flash dark-mode script. Lives at the document root (which renders once)
+    // rather than in `AppLayout` (which re-renders on every navigation) — a
+    // `document::Script` cannot be updated after creation, so re-emitting it on
+    // navigation triggers the dioxus-document "changing props is not supported"
+    // warning. It runs before paint to apply the dark class and avoid a flash.
+    const ANTI_FLASH_SCRIPT: &str = "(function(){var t=localStorage.getItem('mk_theme');var \
+                                     dark=t==='dark'||((!t||t==='system')&&window.matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.\
+                                     classList.toggle('dark',dark);})();";
+
+    rsx! {
+        document::Script { {ANTI_FLASH_SCRIPT} }
+        Router::<Route> {}
+    }
 }
 
 #[cfg(all(test, feature = "server"))]

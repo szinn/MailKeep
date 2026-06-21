@@ -63,7 +63,7 @@ async fn cmd_server(config: mailkeep::config::Config) -> anyhow::Result<()> {
         .cipher_service(cipher_service)
         .raw_storage_service(storage_service.raw_storage_service)
         .attachment_storage_service(storage_service.attachment_storage_service)
-        .imap_port_factory(mk_imap::create_imap_port_factory())
+        .imap_port_factory(mk_imap::create_imap_port_factory(Duration::from_secs(config.imap_poll_interval_secs)))
         .job_concurrency(config.job_concurrency)
         .build()
         .context("ExternalServices missing required field")?;
@@ -75,15 +75,17 @@ async fn cmd_server(config: mailkeep::config::Config) -> anyhow::Result<()> {
     let frontend_subsystem = create_frontend_subsystem(&config.frontend, oidc_config, core_services.clone());
 
     let core_subsystem = create_core_subsystem(&core_services);
+    let imap_subsystem = mk_imap::create_imap_subsystem(core_services.imap_account_service.clone());
 
     span.exit();
 
     Toplevel::new(async |s: &mut SubsystemHandle| {
         s.start(SubsystemBuilder::new("Core", core_subsystem.into_subsystem()));
+        s.start(SubsystemBuilder::new("Imap", imap_subsystem.into_subsystem()));
         s.start(SubsystemBuilder::new("Frontend", frontend_subsystem.into_subsystem()));
     })
     .catch_signals()
-    .handle_shutdown_requests(Duration::from_secs(3))
+    .handle_shutdown_requests(Duration::from_secs(10))
     .await?;
 
     repository_service.repository().close().await.context("Couldn't close database")?;

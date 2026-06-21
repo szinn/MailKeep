@@ -30,6 +30,7 @@ tower = { workspace = true, optional = true }
 tower-http = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 openidconnect = { workspace = true, optional = true }
+secrecy = { workspace = true, optional = true }
 
 [dev-dependencies]
 
@@ -51,6 +52,7 @@ server = [
     "dep:tracing",
     "dep:tokio-graceful-shutdown",
     "dep:openidconnect",
+    "dep:secrecy",
     "dioxus/server",
 ]
 
