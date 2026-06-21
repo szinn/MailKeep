@@ -143,7 +143,7 @@ rpassword = "7.3.1"
 
 # Testing
 insta = { version = "1.48.0", features = ["filters"] }
-testcontainers = "0.24.0"
+testcontainers = "0.27.3"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
