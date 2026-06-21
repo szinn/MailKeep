@@ -67,12 +67,7 @@ pub(crate) fn AppLayout() -> Element {
         let _ = &route;
     });
 
-    const ANTI_FLASH_SCRIPT: &str = "(function(){var t=localStorage.getItem('mk_theme');var \
-                                     dark=t==='dark'||((!t||t==='system')&&window.matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.\
-                                     classList.toggle('dark',dark);})();";
-
     rsx! {
-        document::Script { {ANTI_FLASH_SCRIPT} }
         document::Stylesheet { href: asset!("/assets/tailwind.css") }
         document::Link { rel: "icon", href: asset!("/assets/favicon.ico") }
         document::Link { rel: "apple-touch-icon", sizes: "180x180", href: asset!("/assets/apple-touch-icon.png") }
