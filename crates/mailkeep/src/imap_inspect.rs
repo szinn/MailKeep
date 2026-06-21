@@ -116,6 +116,7 @@ mod tests {
             special_use,
             has_children: false,
             no_select,
+            delimiter: None,
         }
     }
 

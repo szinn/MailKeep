@@ -154,6 +154,7 @@ fn remote_folder_from_name(name: &Name) -> RemoteFolder {
         special_use: special_use_from_attributes(&path, &attrs),
         no_select: attrs.iter().any(|a| a == "noselect"),
         has_children: attrs.iter().any(|a| a == "haschildren"),
+        delimiter: name.delimiter().map(str::to_string),
         path,
     }
 }

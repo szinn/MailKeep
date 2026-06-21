@@ -281,6 +281,7 @@ mod tests {
                 special_use: Some(crate::folder::SpecialUse::Inbox),
                 has_children: false,
                 no_select: false,
+                delimiter: None,
             }])
         });
         let svc = create_imap_account_service(
