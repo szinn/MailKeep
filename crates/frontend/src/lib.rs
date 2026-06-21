@@ -139,7 +139,7 @@ pub use error::FrontendError;
 pub mod server;
 
 use components::AppLayout;
-use routes::{HomePage, LandingPage, ProfilePage, SettingsPage};
+use routes::{AccountAddPage, HomePage, LandingPage, ProfilePage, SettingsPage};
 use serde::Deserialize;
 
 #[derive(Routable, Clone, Debug, PartialEq)]
@@ -150,6 +150,8 @@ enum Route {
     #[layout(AppLayout)]
         #[route("/")]
         HomePage,
+        #[route("/accounts/new")]
+        AccountAddPage,
         #[route("/settings")]
         SettingsPage,
         #[route("/profile")]
