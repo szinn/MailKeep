@@ -17,11 +17,6 @@
   prBodyTemplate: "{{{header}}}{{{table}}}{{{warnings}}}{{{notes}}}{{{changelogs}}}",
   packageRules: [
     {
-      matchDatasources: ["crate"],
-      matchPackagePatterns: ["sqlx"],
-      allowedVersions: "<0.9"
-    },
-    {
       matchManagers: ["github-actions"],
       matchUpdateTypes: ["minor", "patch", "digest"],
       addLabels: ["ci"],
