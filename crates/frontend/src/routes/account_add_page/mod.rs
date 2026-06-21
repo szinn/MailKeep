@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 
 pub(crate) mod dtos;
+pub(crate) mod folder_tree;
 use dtos::{AccountSummaryDto, NewAccountDto, RemoteFolderDto, ServerConfigDto};
 #[cfg(feature = "server")]
 use {
