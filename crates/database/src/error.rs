@@ -21,6 +21,15 @@ mod pg_error_codes {
     pub const QUERY_CANCELED: &str = "57014";
 }
 
+/// SQLite primary result codes (surfaced by sqlx as the bare integer string).
+/// See: <https://www.sqlite.org/rescode.html>
+mod sqlite_busy {
+    /// 5: `SQLITE_BUSY` — the database file is locked by another connection.
+    pub const BUSY: &str = "5";
+    /// 6: `SQLITE_LOCKED` — a table in the database is locked.
+    pub const LOCKED: &str = "6";
+}
+
 #[allow(clippy::needless_pass_by_value, reason = "Required for map_err")]
 pub fn handle_dberr(error: DbErr) -> RepositoryError {
     // Connectivity errors: network/DNS failure, pool exhaustion, closed pool.
@@ -62,6 +71,17 @@ pub fn handle_dberr(error: DbErr) -> RepositoryError {
             pg_error_codes::QUERY_CANCELED => {
                 tracing::warn!(error = %error, "Query canceled");
                 RepositoryError::QueryCanceled
+            }
+            // SQLite contention: SQLITE_BUSY (5) and SQLITE_LOCKED (6). The lock
+            // clears once the holding transaction commits, so these are transient
+            // and must be retried — not treated as a permanent failure. busy_timeout
+            // covers simple write waits, but read→write snapshot conflicts
+            // (BUSY_SNAPSHOT) still surface here. These bare numeric codes are
+            // SQLite-only; Postgres/MySQL use SQLSTATE strings, so there is no
+            // collision with the codes matched above.
+            sqlite_busy::BUSY | sqlite_busy::LOCKED => {
+                tracing::warn!(error_code = %code, error = %error, "Database busy/locked — transient, will retry");
+                RepositoryError::Busy(error.to_string())
             }
             _ => {
                 tracing::error!(error_code = %code, error = %error, "Unhandled database error code");

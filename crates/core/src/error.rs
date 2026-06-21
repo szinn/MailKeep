@@ -99,7 +99,10 @@ impl Error {
     /// a restart; subsystems should retry rather than propagating these.
     #[must_use]
     pub fn is_transient(&self) -> bool {
-        matches!(self, Self::RepositoryError(RepositoryError::Connection(_)) | Self::StorageUnavailable(_))
+        matches!(
+            self,
+            Self::RepositoryError(RepositoryError::Connection(_) | RepositoryError::Busy(_)) | Self::StorageUnavailable(_)
+        )
     }
 }
 
@@ -127,6 +130,12 @@ pub enum RepositoryError {
     /// exhausted). Transient — callers should retry.
     #[error("Connection Error: {0}")]
     Connection(String),
+
+    /// Database temporarily locked/busy (SQLite `SQLITE_BUSY`/`SQLITE_LOCKED`,
+    /// or an equivalent serialization conflict). Transient — the lock clears
+    /// once the holding transaction commits, so callers should retry.
+    #[error("Database busy: {0}")]
+    Busy(String),
 }
 
 impl RepositoryError {
@@ -138,7 +147,7 @@ impl RepositoryError {
             Self::Conflict => ErrorKind::Conflict,
             Self::Constraint(_) => ErrorKind::InvalidInput,
             Self::ReadOnly | Self::Database(_) | Self::QueryCanceled => ErrorKind::Internal,
-            Self::Connection(_) => ErrorKind::ServiceUnavailable,
+            Self::Connection(_) | Self::Busy(_) => ErrorKind::ServiceUnavailable,
         }
     }
 }
@@ -157,6 +166,17 @@ mod tests {
     fn is_transient_storage_unavailable() {
         let e = Error::StorageUnavailable("NFS gone".into());
         assert!(e.is_transient());
+    }
+
+    #[test]
+    fn is_transient_database_busy() {
+        let e = Error::RepositoryError(RepositoryError::Busy("database is locked".into()));
+        assert!(e.is_transient(), "SQLite busy/locked must be transient so the worker retries");
+    }
+
+    #[test]
+    fn database_busy_kind_is_service_unavailable() {
+        assert_eq!(RepositoryError::Busy("x".into()).kind(), ErrorKind::ServiceUnavailable);
     }
 
     #[test]
