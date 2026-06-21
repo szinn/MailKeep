@@ -5,7 +5,7 @@ use secrecy::SecretString;
 
 use crate::{
     Error,
-    account::{Account, AccountId, AccountService, AccountStatus},
+    account::{Account, AccountId, AccountService, AccountStatus, Credentials},
     crypto::CipherService,
     folder::{Folder, FolderService},
     imap::{
@@ -93,7 +93,11 @@ impl ImapAccountServiceImpl {
     async fn start_one(&self, account: &Account) -> Result<(), Error> {
         let folders = self.folder_service.list_enabled_folders(account.id).await?;
         let plaintext = self.cipher_service.decrypt(account.id, &account.credentials)?;
-        let password = String::from_utf8(plaintext).map_err(|_| Error::Validation("decrypted credential is not valid UTF-8".into()))?;
+        // Credentials are stored JSON-serialized (see
+        // `AccountServiceImpl::encrypt_password`), so deserialize the
+        // `Credentials` enum rather than treating the plaintext as a raw
+        // password.
+        let Credentials::Password(password) = serde_json::from_slice::<Credentials>(&plaintext).map_err(|e| Error::CredentialsDeserialize(e.to_string()))?;
         let creds = ImapCredentials {
             username: account.username.clone(),
             password: SecretString::from(password),
@@ -219,7 +223,11 @@ mod tests {
     }
 
     fn account(id: AccountId, cipher: &Arc<dyn CipherService>, password: &str) -> Account {
-        let ciphertext = cipher.encrypt(id, password.as_bytes());
+        // Encrypt exactly as `AccountServiceImpl::encrypt_password` does:
+        // JSON-serialize the `Credentials` enum, then encrypt. `start_one`
+        // deserializes the same way.
+        let plaintext = serde_json::to_vec(&Credentials::Password(password.to_string())).unwrap();
+        let ciphertext = cipher.encrypt(id, &plaintext);
         AccountBuilder::default()
             .id(id)
             .version(0)
