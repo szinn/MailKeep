@@ -1,5 +1,7 @@
+mod account_actions;
 mod format;
 
+use account_actions::set_account_enabled;
 use dioxus::prelude::*;
 use format::{status_dot_class, status_label};
 #[cfg(feature = "server")]
@@ -93,6 +95,12 @@ fn AccountRow(account: AccountSummaryDto, refresh: Signal<u32>) -> Element {
     let synced = account.last_synced.clone().unwrap_or_else(|| "—".to_string());
     let err_title = account.last_error.clone().unwrap_or_default();
 
+    let mut menu_open = use_signal(|| false);
+    let mut busy = use_signal(|| false);
+    let mut row_error: Signal<Option<String>> = use_signal(|| None);
+    let enabled = account.status != "Disabled";
+    let token = account.token.clone();
+
     rsx! {
         li { key: "{account.token}", class: "flex items-start gap-2 px-4 py-3",
             div { class: "flex-1 min-w-0",
@@ -104,8 +112,45 @@ fn AccountRow(account: AccountSummaryDto, refresh: Signal<u32>) -> Element {
                     span { class: "text-gray-300 dark:text-slate-600", "·" }
                     span { "{synced}" }
                 }
+                if let Some(msg) = row_error() {
+                    div { class: "px-4 pb-2 text-xs text-red-600 dark:text-red-400", "{msg}" }
+                }
             }
-            // Kebab menu added in Task 3.
+            div { class: "relative shrink-0",
+                button {
+                    class: "rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700",
+                    title: "Actions",
+                    disabled: busy(),
+                    onclick: move |_| menu_open.toggle(),
+                    "⋯"
+                }
+                if menu_open() {
+                    div { class: "fixed inset-0 z-40", onclick: move |_| menu_open.set(false) }
+                    div { class: "absolute right-0 top-full mt-1 w-40 bg-white dark:bg-slate-800 rounded-lg shadow-lg py-1 z-50 border dark:border-slate-700 text-sm",
+                        button {
+                            class: "w-full text-left px-4 py-2 text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700",
+                            onclick: {
+                                let token = token.clone();
+                                move |_| {
+                                    let token = token.clone();
+                                    menu_open.set(false);
+                                    busy.set(true);
+                                    row_error.set(None);
+                                    spawn(async move {
+                                        match set_account_enabled(token, !enabled).await {
+                                            Ok(()) => { refresh += 1; }
+                                            Err(e) => row_error.set(Some(e.to_string())),
+                                        }
+                                        busy.set(false);
+                                    });
+                                }
+                            },
+                            if enabled { "Disable" } else { "Enable" }
+                        }
+                        // "Edit Folders" added in Task 5; "Delete" added in Task 4.
+                    }
+                }
+            }
         }
     }
 }
