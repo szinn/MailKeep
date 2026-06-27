@@ -1,7 +1,9 @@
 mod account_actions;
+mod delete_account_modal;
 mod format;
 
 use account_actions::set_account_enabled;
+use delete_account_modal::DeleteAccountModal;
 use dioxus::prelude::*;
 use format::{status_dot_class, status_label};
 #[cfg(feature = "server")]
@@ -98,6 +100,7 @@ fn AccountRow(account: AccountSummaryDto, refresh: Signal<u32>) -> Element {
     let mut menu_open = use_signal(|| false);
     let mut busy = use_signal(|| false);
     let mut row_error: Signal<Option<String>> = use_signal(|| None);
+    let mut show_delete = use_signal(|| false);
     let enabled = account.status != "Disabled";
     let token = account.token.clone();
 
@@ -147,9 +150,22 @@ fn AccountRow(account: AccountSummaryDto, refresh: Signal<u32>) -> Element {
                             },
                             if enabled { "Disable" } else { "Enable" }
                         }
-                        // "Edit Folders" added in Task 5; "Delete" added in Task 4.
+                        // "Edit Folders" added in Task 5.
+                        button {
+                            class: "w-full text-left px-4 py-2 text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-slate-700",
+                            onclick: move |_| { menu_open.set(false); show_delete.set(true); },
+                            "Delete"
+                        }
                     }
                 }
+            }
+        }
+        if show_delete() {
+            DeleteAccountModal {
+                token: account.token.clone(),
+                display_name: account.display_name.clone(),
+                on_close: move |()| show_delete.set(false),
+                on_deleted: move |()| { show_delete.set(false); refresh += 1; },
             }
         }
     }
