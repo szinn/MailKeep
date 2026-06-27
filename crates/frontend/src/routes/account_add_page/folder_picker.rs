@@ -94,7 +94,7 @@ pub(crate) fn FolderPicker(tree: Signal<FolderTree>, dimmed: bool, on_toggle: Ev
 
 /// Maps a folder's special-use attribute to a distinct glyph. Unknown / none
 /// folders get a generic folder icon.
-fn icon_for(su: Option<&str>) -> &'static str {
+pub(crate) fn icon_for(su: Option<&str>) -> &'static str {
     match su {
         Some("inbox") => "📥",
         Some("sent") => "📤",

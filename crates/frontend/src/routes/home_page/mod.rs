@@ -1,10 +1,12 @@
 mod account_actions;
 mod delete_account_modal;
+mod edit_folders_modal;
 mod format;
 
 use account_actions::set_account_enabled;
 use delete_account_modal::DeleteAccountModal;
 use dioxus::prelude::*;
+use edit_folders_modal::EditFoldersModal;
 use format::{status_dot_class, status_label};
 #[cfg(feature = "server")]
 use {crate::routes::server_helpers::authenticated_user, crate::server::AuthSession};
@@ -101,6 +103,7 @@ fn AccountRow(account: AccountSummaryDto, refresh: Signal<u32>) -> Element {
     let mut busy = use_signal(|| false);
     let mut row_error: Signal<Option<String>> = use_signal(|| None);
     let mut show_delete = use_signal(|| false);
+    let mut show_edit = use_signal(|| false);
     let enabled = account.status != "Disabled";
     let token = account.token.clone();
 
@@ -150,7 +153,11 @@ fn AccountRow(account: AccountSummaryDto, refresh: Signal<u32>) -> Element {
                             },
                             if enabled { "Disable" } else { "Enable" }
                         }
-                        // "Edit Folders" added in Task 5.
+                        button {
+                            class: "w-full text-left px-4 py-2 text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700",
+                            onclick: move |_| { menu_open.set(false); show_edit.set(true); },
+                            "Edit Folders"
+                        }
                         button {
                             class: "w-full text-left px-4 py-2 text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-slate-700",
                             onclick: move |_| { menu_open.set(false); show_delete.set(true); },
@@ -166,6 +173,13 @@ fn AccountRow(account: AccountSummaryDto, refresh: Signal<u32>) -> Element {
                 display_name: account.display_name.clone(),
                 on_close: move |()| show_delete.set(false),
                 on_deleted: move |()| { show_delete.set(false); refresh += 1; },
+            }
+        }
+        if show_edit() {
+            EditFoldersModal {
+                token: account.token.clone(),
+                on_close: move |()| show_edit.set(false),
+                on_saved: move |()| { show_edit.set(false); refresh += 1; },
             }
         }
     }
