@@ -25,6 +25,9 @@ mod imap_sync;
 #[cfg(feature = "greenmail")]
 mod account_add;
 
+#[cfg(feature = "greenmail")]
+mod account_lifecycle;
+
 #[cfg(feature = "sqlite")]
 pub(crate) use sqlite::setup;
 
