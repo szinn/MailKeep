@@ -1,3 +1,5 @@
+mod format;
+
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use {crate::routes::server_helpers::authenticated_user, crate::server::AuthSession};
