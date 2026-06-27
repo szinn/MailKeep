@@ -94,11 +94,11 @@ pub(crate) async fn set_account_folders_enabled(account_token: String, folders: 
     let mut changed = false;
     for fe in &folders {
         let fid = fe.token.parse::<FolderToken>().map_err(to_server_err)?.id();
-        if let Some(&cur) = by_id.get(&fid) {
-            if cur != fe.enabled {
-                core_services.folder_service.set_enabled(fid, fe.enabled).await.map_err(to_server_err)?;
-                changed = true;
-            }
+        if let Some(&cur) = by_id.get(&fid)
+            && cur != fe.enabled
+        {
+            core_services.folder_service.set_enabled(fid, fe.enabled).await.map_err(to_server_err)?;
+            changed = true;
         }
     }
 

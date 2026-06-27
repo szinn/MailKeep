@@ -101,7 +101,7 @@ pub(crate) async fn create_account_and_start(payload: NewAccountDto) -> Result<A
         .map(|f| NewFolderRequest {
             path: f.path,
             display_name: None,
-            special_use: special_use_from_string(&f.special_use),
+            special_use: special_use_from_string(f.special_use.as_ref()),
             uidvalidity: None,
         })
         .collect();
@@ -125,7 +125,7 @@ pub(crate) async fn create_account_and_start(payload: NewAccountDto) -> Result<A
 pub(crate) async fn list_accounts() -> Result<Vec<AccountSummaryDto>, ServerFnError> {
     let user = authenticated_user(&auth_session)?;
     let mut accounts = core_services.account_service.list_accounts(user.id()).await.map_err(to_server_err)?;
-    accounts.sort_by(|a, b| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()));
+    accounts.sort_by_key(|a| a.display_name.to_lowercase());
     Ok(accounts.iter().map(account_to_summary).collect())
 }
 
@@ -222,7 +222,7 @@ pub(crate) fn AccountAddPage() -> Element {
         });
     };
 
-    let on_probe = move |_| {
+    let on_probe = move |()| {
         conn_error.set(None);
         folder_error.set(None);
         if display_name().trim().is_empty() {

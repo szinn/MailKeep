@@ -17,10 +17,10 @@ pub(crate) fn AppLayout() -> Element {
     // Load persisted theme preference once; write to global signal.
     let theme_pref = use_server_future(get_theme_preference);
     use_effect(move || {
-        if let Ok(res) = theme_pref {
-            if let Some(Ok(Some(mode))) = res() {
-                *THEME_MODE.write() = mode;
-            }
+        if let Ok(res) = theme_pref
+            && let Some(Ok(Some(mode))) = res()
+        {
+            *THEME_MODE.write() = mode;
         }
     });
 
@@ -29,14 +29,13 @@ pub(crate) fn AppLayout() -> Element {
     // arrives). Runs once after mount, only on the WASM client.
     use_hook(move || {
         spawn(async move {
-            if let Ok(val) = document::eval("return localStorage.getItem('mk_theme') || ''").await {
-                if let Some(s) = val.as_str() {
-                    if !s.is_empty() {
-                        use crate::components::theme::ThemeMode;
-                        if *THEME_MODE.peek() == ThemeMode::System {
-                            *THEME_MODE.write() = ThemeMode::from_str(s);
-                        }
-                    }
+            if let Ok(val) = document::eval("return localStorage.getItem('mk_theme') || ''").await
+                && let Some(s) = val.as_str()
+                && !s.is_empty()
+            {
+                use crate::components::theme::ThemeMode;
+                if *THEME_MODE.peek() == ThemeMode::System {
+                    *THEME_MODE.write() = ThemeMode::from_str(s);
                 }
             }
         });

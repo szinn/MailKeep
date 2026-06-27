@@ -1,3 +1,7 @@
+// Dioxus rsx! text/attribute interpolation expands to format!; these are not
+// real format! calls.
+#![allow(clippy::useless_format)]
+
 use dioxus::prelude::*;
 
 mod components;

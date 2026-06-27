@@ -20,8 +20,8 @@ pub(crate) fn status_icon_color(status: &str) -> &'static str {
         "Syncing" => "text-blue-500",
         "Idle" => "text-green-500",
         "Error" => "text-red-500",
-        "Disabled" => "text-gray-400",
         "PendingFirstSync" => "text-amber-500",
+        // Disabled + unknown → gray
         _ => "text-gray-400",
     }
 }

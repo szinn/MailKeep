@@ -48,9 +48,8 @@ enum Section {
 
 impl Section {
     fn from_hash(hash: &str) -> Self {
-        match hash.trim_start_matches('#') {
-            _ => Self::Users,
-        }
+        let _ = hash.trim_start_matches('#');
+        Self::Users
     }
 
     fn as_hash(self) -> &'static str {
@@ -90,12 +89,12 @@ pub(crate) fn SettingsPage() -> Element {
     // Restore section from URL hash on mount.
     use_effect(move || {
         spawn(async move {
-            if let Ok(val) = document::eval("return window.location.hash").await {
-                if let Some(hash) = val.as_str() {
-                    let section = Section::from_hash(hash);
-                    if section != Section::Users {
-                        active_section.set(section);
-                    }
+            if let Ok(val) = document::eval("return window.location.hash").await
+                && let Some(hash) = val.as_str()
+            {
+                let section = Section::from_hash(hash);
+                if section != Section::Users {
+                    active_section.set(section);
                 }
             }
         });

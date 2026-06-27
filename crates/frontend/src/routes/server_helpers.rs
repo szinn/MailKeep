@@ -41,6 +41,10 @@ pub(crate) fn to_server_err<E: std::fmt::Display>(e: E) -> ServerFnError {
 /// (e.g. `get_pending_count` which returns `Ok(None)` to hide the pending count
 /// from unprivileged users).
 #[cfg(feature = "server")]
+#[expect(
+    dead_code,
+    reason = "capability-check helpers for server fns; not yet wired — see inline permission checks in users_section.rs"
+)]
 pub(crate) async fn require_capability(auth_session: &AuthSession, capability: Capability, method: Method) -> Result<(), ServerFnError> {
     let current_user = auth_session.current_user.clone().unwrap_or_default();
     if !Auth::<AuthUser, UserId, BackendSessionPool>::build([method.clone()], true)
@@ -61,6 +65,10 @@ pub(crate) async fn require_capability(auth_session: &AuthSession, capability: C
 /// Returns `Err(ServerFnError::new("Forbidden"))` if none of the capabilities
 /// match.
 #[cfg(feature = "server")]
+#[expect(
+    dead_code,
+    reason = "capability-check helpers for server fns; not yet wired — see inline permission checks in users_section.rs"
+)]
 pub(crate) async fn require_any_capability(auth_session: &AuthSession, capabilities: &[Capability], method: Method) -> Result<(), ServerFnError> {
     let current_user = auth_session.current_user.clone().unwrap_or_default();
     for capability in capabilities {

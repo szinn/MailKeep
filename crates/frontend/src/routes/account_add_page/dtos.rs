@@ -88,7 +88,7 @@ mod mapping {
         imap::{ImapServerConfig, RemoteFolder, TlsMode},
     };
 
-    use super::*;
+    use super::{AccountFolderDto, AccountSummaryDto, RemoteFolderDto, ServerConfigDto};
 
     /// Whole-unit relative time. Pure (testable) — caller supplies `now`.
     pub(crate) fn relative_time(from: DateTime<Utc>, now: DateTime<Utc>) -> String {
@@ -123,19 +123,12 @@ mod mapping {
         }
     }
 
-    pub(crate) fn tls_to_string(t: TlsMode) -> String {
-        match t {
-            TlsMode::Tls => "Tls".to_string(),
-            TlsMode::StartTls => "StartTls".to_string(),
-        }
-    }
-
     pub(crate) fn special_use_to_string(s: Option<SpecialUse>) -> Option<String> {
         s.map(|v| v.as_str().to_string())
     }
 
-    pub(crate) fn special_use_from_string(s: &Option<String>) -> Option<SpecialUse> {
-        s.as_deref().and_then(|v| SpecialUse::from_str(v).ok())
+    pub(crate) fn special_use_from_string(s: Option<&String>) -> Option<SpecialUse> {
+        s.and_then(|v| SpecialUse::from_str(v).ok())
     }
 
     pub(crate) fn server_config_from_dto(d: &ServerConfigDto) -> ImapServerConfig {
@@ -196,17 +189,15 @@ mod tests {
         assert_eq!(tls_from_string("Tls"), TlsMode::Tls);
         assert_eq!(tls_from_string("StartTls"), TlsMode::StartTls);
         assert_eq!(tls_from_string("garbage"), TlsMode::Tls);
-        assert_eq!(tls_to_string(TlsMode::Tls), "Tls");
-        assert_eq!(tls_to_string(TlsMode::StartTls), "StartTls");
     }
 
     #[test]
     fn special_use_round_trips_and_rejects_unknown() {
         assert_eq!(special_use_to_string(Some(SpecialUse::Inbox)), Some("inbox".into()));
         assert_eq!(special_use_to_string(None), None);
-        assert_eq!(special_use_from_string(&Some("sent".into())), Some(SpecialUse::Sent));
-        assert_eq!(special_use_from_string(&Some("nope".into())), None);
-        assert_eq!(special_use_from_string(&None), None);
+        assert_eq!(special_use_from_string(Some(&"sent".to_string())), Some(SpecialUse::Sent));
+        assert_eq!(special_use_from_string(Some(&"nope".to_string())), None);
+        assert_eq!(special_use_from_string(None), None);
     }
 
     #[test]

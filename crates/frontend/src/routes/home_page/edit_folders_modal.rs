@@ -20,17 +20,17 @@ pub(crate) fn EditFoldersModal(token: String, on_close: EventHandler<()>, on_sav
 
     // Seed `edited` once folders arrive.
     use_effect(move || {
-        if let Some(Ok(list)) = folders() {
-            if edited.read().is_empty() {
-                edited.set(
-                    list.iter()
-                        .map(|f| FolderEnabledDto {
-                            token: f.token.clone(),
-                            enabled: f.enabled,
-                        })
-                        .collect(),
-                );
-            }
+        if let Some(Ok(list)) = folders()
+            && edited.read().is_empty()
+        {
+            edited.set(
+                list.iter()
+                    .map(|f| FolderEnabledDto {
+                        token: f.token.clone(),
+                        enabled: f.enabled,
+                    })
+                    .collect(),
+            );
         }
     });
 
