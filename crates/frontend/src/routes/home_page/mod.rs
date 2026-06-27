@@ -7,7 +7,7 @@ use account_actions::set_account_enabled;
 use delete_account_modal::DeleteAccountModal;
 use dioxus::prelude::*;
 use edit_folders_modal::EditFoldersModal;
-use format::{status_dot_class, status_label};
+use format::{status_icon_color, status_tooltip};
 #[cfg(feature = "server")]
 use {crate::routes::server_helpers::authenticated_user, crate::server::AuthSession};
 
@@ -94,10 +94,7 @@ pub(crate) fn HomePage() -> Element {
 
 #[component]
 fn AccountRow(account: AccountSummaryDto, refresh: Signal<u32>) -> Element {
-    let dot = status_dot_class(&account.status);
-    let label = status_label(&account.status);
-    let synced = account.last_synced.clone().unwrap_or_else(|| "—".to_string());
-    let err_title = account.last_error.clone().unwrap_or_default();
+    let tooltip = status_tooltip(&account.status, account.last_synced.as_deref(), account.last_error.as_deref());
 
     let mut menu_open = use_signal(|| false);
     let mut busy = use_signal(|| false);
@@ -108,18 +105,13 @@ fn AccountRow(account: AccountSummaryDto, refresh: Signal<u32>) -> Element {
     let token = account.token.clone();
 
     rsx! {
-        li { key: "{account.token}", class: "flex items-start gap-2 px-4 py-3",
+        li { key: "{account.token}", class: "flex items-center gap-3 px-4 py-3",
+            StatusIcon { status: account.status.clone(), tooltip }
             div { class: "flex-1 min-w-0",
                 div { class: "text-sm font-medium text-gray-900 dark:text-slate-100 truncate", "{account.display_name}" }
                 div { class: "text-xs text-gray-500 dark:text-slate-400 truncate", "{account.email}" }
-                div { class: "mt-1 flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400",
-                    span { class: "inline-block h-2 w-2 rounded-full {dot}", title: "{err_title}" }
-                    span { "{label}" }
-                    span { class: "text-gray-300 dark:text-slate-600", "·" }
-                    span { "{synced}" }
-                }
                 if let Some(msg) = row_error() {
-                    div { class: "px-4 pb-2 text-xs text-red-600 dark:text-red-400", "{msg}" }
+                    div { class: "mt-1 text-xs text-red-600 dark:text-red-400", "{msg}" }
                 }
             }
             div { class: "relative shrink-0",
@@ -180,6 +172,46 @@ fn AccountRow(account: AccountSummaryDto, refresh: Signal<u32>) -> Element {
                 token: account.token.clone(),
                 on_close: move |()| show_edit.set(false),
                 on_saved: move |()| { show_edit.set(false); refresh += 1; },
+            }
+        }
+    }
+}
+
+/// Per-state status glyph: color + shape (Heroicons outline). Syncing spins.
+/// The wrapping `span` carries the hover tooltip via the native `title`.
+#[component]
+fn StatusIcon(status: String, tooltip: String) -> Element {
+    let color = status_icon_color(&status);
+    let spin = if status == "Syncing" { "animate-spin" } else { "" };
+    rsx! {
+        span { class: "shrink-0", title: "{tooltip}",
+            match status.as_str() {
+                "Idle" => rsx! {
+                    svg { class: "h-4 w-4 {color}", fill: "none", view_box: "0 0 24 24", stroke_width: "1.5", stroke: "currentColor",
+                        path { stroke_linecap: "round", stroke_linejoin: "round", d: "M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" }
+                    }
+                },
+                "Syncing" => rsx! {
+                    svg { class: "h-4 w-4 {color} {spin}", fill: "none", view_box: "0 0 24 24", stroke_width: "1.5", stroke: "currentColor",
+                        path { stroke_linecap: "round", stroke_linejoin: "round", d: "M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" }
+                    }
+                },
+                "Error" => rsx! {
+                    svg { class: "h-4 w-4 {color}", fill: "none", view_box: "0 0 24 24", stroke_width: "1.5", stroke: "currentColor",
+                        path { stroke_linecap: "round", stroke_linejoin: "round", d: "M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" }
+                    }
+                },
+                "Disabled" => rsx! {
+                    svg { class: "h-4 w-4 {color}", fill: "none", view_box: "0 0 24 24", stroke_width: "1.5", stroke: "currentColor",
+                        path { stroke_linecap: "round", stroke_linejoin: "round", d: "M14.25 9v6m-4.5 0V9M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" }
+                    }
+                },
+                // PendingFirstSync and any unknown state → clock
+                _ => rsx! {
+                    svg { class: "h-4 w-4 {color}", fill: "none", view_box: "0 0 24 24", stroke_width: "1.5", stroke: "currentColor",
+                        path { stroke_linecap: "round", stroke_linejoin: "round", d: "M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" }
+                    }
+                },
             }
         }
     }
