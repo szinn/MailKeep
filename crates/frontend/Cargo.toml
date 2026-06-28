@@ -13,6 +13,7 @@ repository = { workspace = true }
 mk-core = { workspace = true, optional = true }
 
 anyhow = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 tokio-graceful-shutdown = { workspace = true, optional = true }
@@ -38,6 +39,7 @@ secrecy = { workspace = true, optional = true }
 web = ["dioxus/web"]
 server = [
     "dep:anyhow",
+    "dep:futures",
     "dep:dioxus-server",
     "dep:rand",
     "dep:tokio",

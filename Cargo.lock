@@ -4125,6 +4125,7 @@ dependencies = [
  "clap",
  "dioxus",
  "dioxus-server",
+ "futures",
  "mk-core",
  "openidconnect",
  "rand 0.10.1",

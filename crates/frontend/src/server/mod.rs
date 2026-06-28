@@ -28,6 +28,7 @@ pub(crate) use oidc::OidcClient;
 pub(crate) use session_pool::{AuthSession, BackendSessionPool};
 
 pub(crate) mod auth_user;
+pub(crate) mod events;
 
 pub(crate) use auth_user::AuthUser;
 
@@ -102,7 +103,11 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
             app_router = app_router.merge(oidc::oidc_router()).layer(Extension(client)).layer(Extension(Arc::new(cfg)));
         }
 
-        let app_router = app_router.layer(Extension(core_services)).layer(Extension(frontend_config)).layer(middleware);
+        let app_router = app_router
+            .merge(events::events_router())
+            .layer(Extension(core_services))
+            .layer(Extension(frontend_config))
+            .layer(middleware);
 
         let health_handler = || async { axum::http::StatusCode::OK };
         let router = axum::Router::new()
