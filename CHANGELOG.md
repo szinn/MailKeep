@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2](https://github.com/szinn/MailKeep/compare/v0.1.1..v0.1.2) - 2026-06-28
+
+### Features
+
+- _(core)_ Log job completion with duration and QUIET split - ([a0c0544](https://github.com/szinn/MailKeep/commit/a0c05442a7b9470b1f1032fac2292d7bbc409287))
+- _(core)_ Log sync stop and reconcile teardown at INFO - ([106bcf6](https://github.com/szinn/MailKeep/commit/106bcf647f00a124b03c1c9d36eea73f9a38f1e4))
+- _(core)_ Log account status transitions and lifecycle at INFO - ([266d6d4](https://github.com/szinn/MailKeep/commit/266d6d451af370e3c221fc4b33cd79cb9ada62f3))
+- _(frontend)_ Remove redundant account-list Refresh button - ([e757377](https://github.com/szinn/MailKeep/commit/e75737719a8a501afbafbb51443f96bd9027b38a))
+- _(imap)_ Per-folder-per-pass sync summary at INFO - ([24e3fe3](https://github.com/szinn/MailKeep/commit/24e3fe3af6880e9cf9144f9c32679b317f59f56f))
+
 ## [0.1.1] - 2026-06-28
 
 ### Features
