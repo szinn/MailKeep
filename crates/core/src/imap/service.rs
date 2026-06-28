@@ -138,7 +138,9 @@ impl ImapAccountService for ImapAccountServiceImpl {
     }
 
     async fn stop_account(&self, account_id: AccountId) -> Result<(), Error> {
-        self.port.stop_account(account_id).await
+        self.port.stop_account(account_id).await?;
+        tracing::info!(account_id, "stopped account sync");
+        Ok(())
     }
 
     async fn status(&self, account_id: AccountId) -> Result<SyncStatus, Error> {
@@ -220,8 +222,9 @@ impl ImapAccountService for ImapAccountServiceImpl {
         // here so its leaked IDLE/poll tasks cannot outlive the disable.
         for id in self.port.tracked_accounts().await {
             if !enabled_ids.contains(&id) {
-                if let Err(e) = self.port.stop_account(id).await {
-                    tracing::warn!(account_id = id, error = %e, "failed to stop disabled-but-tracked account");
+                match self.port.stop_account(id).await {
+                    Ok(()) => tracing::info!(account_id = id, "stopped disabled-but-tracked account (reconcile teardown)"),
+                    Err(e) => tracing::warn!(account_id = id, error = %e, "failed to stop disabled-but-tracked account"),
                 }
             }
         }
