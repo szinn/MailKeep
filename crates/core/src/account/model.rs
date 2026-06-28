@@ -43,10 +43,11 @@ impl AccountStatus {
 }
 
 impl Account {
-    /// Human-readable identity for log lines: `A_xxx: Display Name (email)`.
+    /// Human-readable identity for log lines: `A_xxx: Display Name`. The email
+    /// address is deliberately omitted to avoid leaking PII into logs.
     #[must_use]
     pub fn log_label(&self) -> String {
-        format!("{}: {} ({})", self.token, self.display_name, self.email_address)
+        format!("{}: {}", self.token, self.display_name)
     }
 }
 
