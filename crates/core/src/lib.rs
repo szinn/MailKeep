@@ -2,6 +2,7 @@ pub mod account;
 pub mod auth;
 pub mod crypto;
 pub mod error;
+pub mod event;
 pub mod folder;
 pub mod imap;
 pub mod ingest;
@@ -22,6 +23,7 @@ use crate::{
     account::{AccountService, AccountServiceImpl},
     auth::{AuthService, AuthServiceImpl},
     crypto::CipherService,
+    event::{EventService, create_event_service},
     folder::{FolderService, FolderServiceImpl},
     imap::{ImapAccountService, ImapPortFactory, create_imap_account_service},
     ingest::{IngestService, create_ingest_service},
@@ -52,6 +54,7 @@ pub struct ExternalServices {
 
 pub struct CoreServices {
     pub account_service: Arc<dyn AccountService>,
+    pub event_service: Arc<dyn EventService>,
     pub auth_service: Arc<dyn AuthService>,
     pub user_service: Arc<dyn UserService>,
     pub user_setting_service: Arc<dyn UserSettingService>,
@@ -79,6 +82,7 @@ impl CoreServices {
             imap_port_factory,
         } = external;
 
+        let event_service = create_event_service();
         let (job_service, wake_notify) = create_job_service(repository_service.clone());
 
         let folder_service: Arc<dyn FolderService> = Arc::new(FolderServiceImpl::new(repository_service.clone()));
@@ -97,6 +101,7 @@ impl CoreServices {
 
         Self {
             account_service,
+            event_service,
             auth_service: Arc::new(AuthServiceImpl::new(repository_service.clone())),
             user_service: Arc::new(UserServiceImpl::new(repository_service.clone())),
             user_setting_service: Arc::new(UserSettingServiceImpl::new(repository_service.clone())),
