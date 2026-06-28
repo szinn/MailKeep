@@ -151,6 +151,7 @@ impl AccountService for AccountServiceImpl {
         };
         let account = with_transaction!(self, account_repository, |tx| account_repository.insert(tx, new_account).await)?;
         self.event_service.notify_accounts_changed();
+        tracing::info!(account_id = account.id, "account created");
         Ok(account)
     }
 
@@ -206,6 +207,7 @@ impl AccountService for AccountServiceImpl {
             account_repository.set_status(tx, account_id, AccountStatus::PendingFirstSync, None).await
         })?;
         self.event_service.notify_accounts_changed();
+        tracing::info!(account_id, "account enabled");
         Ok(())
     }
 
@@ -219,14 +221,17 @@ impl AccountService for AccountServiceImpl {
             account_repository.set_status(tx, account_id, AccountStatus::Disabled, None).await
         })?;
         self.event_service.notify_accounts_changed();
+        tracing::info!(account_id, "account disabled");
         Ok(())
     }
 
     async fn set_status(&self, account_id: AccountId, status: AccountStatus, last_error: Option<String>) -> Result<(), Error> {
+        let logged_error = last_error.clone();
         with_transaction!(self, account_repository, |tx| account_repository
             .set_status(tx, account_id, status, last_error)
             .await)?;
         self.event_service.notify_accounts_changed();
+        tracing::info!(account_id, status = ?status, last_error = logged_error.as_deref(), "account status changed");
         Ok(())
     }
 
@@ -258,6 +263,7 @@ impl AccountService for AccountServiceImpl {
             );
         }
         self.event_service.notify_accounts_changed();
+        tracing::info!(account_id = account_to_delete.id, "account deleted");
         Ok(())
     }
 
