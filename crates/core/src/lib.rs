@@ -94,6 +94,7 @@ impl CoreServices {
             cipher_service.clone(),
             raw_storage_service.clone(),
             attachment_storage_service.clone(),
+            event_service.clone(),
         ));
 
         let imap_port = imap_port_factory(ingest_service.clone(), folder_service.clone(), message_service.clone());

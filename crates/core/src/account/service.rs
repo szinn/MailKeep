@@ -6,6 +6,7 @@ use crate::{
     Error, RepositoryError,
     account::{Account, AccountId, AccountStatus, AccountToken, Credentials, NewAccount, PartialAccountUpdate},
     crypto::{CipherService, Ciphertext},
+    event::EventService,
     imap::ImapServerConfig,
     repository::RepositoryService,
     storage::{AttachmentStorageService, RawStorageService},
@@ -58,6 +59,7 @@ pub(crate) struct AccountServiceImpl {
     cipher_service: Arc<dyn CipherService>,
     raw_storage_service: Arc<dyn RawStorageService>,
     attachment_storage_service: Arc<dyn AttachmentStorageService>,
+    event_service: Arc<dyn EventService>,
 }
 
 impl AccountServiceImpl {
@@ -66,12 +68,14 @@ impl AccountServiceImpl {
         cipher_service: Arc<dyn CipherService>,
         raw_storage_service: Arc<dyn RawStorageService>,
         attachment_storage_service: Arc<dyn AttachmentStorageService>,
+        event_service: Arc<dyn EventService>,
     ) -> Self {
         Self {
             repository_service,
             cipher_service,
             raw_storage_service,
             attachment_storage_service,
+            event_service,
         }
     }
 
@@ -145,7 +149,9 @@ impl AccountService for AccountServiceImpl {
             credentials,
             token,
         };
-        with_transaction!(self, account_repository, |tx| account_repository.insert(tx, new_account).await)
+        let account = with_transaction!(self, account_repository, |tx| account_repository.insert(tx, new_account).await)?;
+        self.event_service.notify_accounts_changed();
+        Ok(account)
     }
 
     async fn get_account(&self, user_id: UserId, account_id: AccountId) -> Result<Account, Error> {
@@ -198,7 +204,9 @@ impl AccountService for AccountServiceImpl {
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
             account_repository.set_enabled(tx, account_id, true).await?;
             account_repository.set_status(tx, account_id, AccountStatus::PendingFirstSync, None).await
-        })
+        })?;
+        self.event_service.notify_accounts_changed();
+        Ok(())
     }
 
     async fn disable(&self, user_id: UserId, account_id: AccountId) -> Result<(), Error> {
@@ -209,13 +217,17 @@ impl AccountService for AccountServiceImpl {
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
             account_repository.set_enabled(tx, account_id, false).await?;
             account_repository.set_status(tx, account_id, AccountStatus::Disabled, None).await
-        })
+        })?;
+        self.event_service.notify_accounts_changed();
+        Ok(())
     }
 
     async fn set_status(&self, account_id: AccountId, status: AccountStatus, last_error: Option<String>) -> Result<(), Error> {
         with_transaction!(self, account_repository, |tx| account_repository
             .set_status(tx, account_id, status, last_error)
-            .await)
+            .await)?;
+        self.event_service.notify_accounts_changed();
+        Ok(())
     }
 
     async fn delete_account(&self, user_id: UserId, account_id: AccountId) -> Result<(), Error> {
@@ -245,6 +257,7 @@ impl AccountService for AccountServiceImpl {
                 "failed to delete attachment storage for account; row is gone, ciphertext is cryptographically inaccessible",
             );
         }
+        self.event_service.notify_accounts_changed();
         Ok(())
     }
 
@@ -265,6 +278,7 @@ mod tests {
     use crate::{
         account::{AccountBuilder, repository::MockAccountRepository},
         crypto::create_cipher_service,
+        event::{MockEventService, create_event_service},
         imap::TlsMode,
         repository::testing::default_repository_service_builder,
         storage::{MockAttachmentStorageService, MockRawStorageService},
@@ -303,7 +317,23 @@ mod tests {
                 .build()
                 .expect("all fields provided"),
         );
-        AccountServiceImpl::new(repository_service, cipher(), Arc::new(raw), Arc::new(attach))
+        AccountServiceImpl::new(repository_service, cipher(), Arc::new(raw), Arc::new(attach), create_event_service())
+    }
+
+    fn make_service_with_event(account_repo: MockAccountRepository, event_service: Arc<dyn EventService>) -> AccountServiceImpl {
+        let repository_service = Arc::new(
+            default_repository_service_builder()
+                .account_repository(Arc::new(account_repo))
+                .build()
+                .expect("all fields provided"),
+        );
+        AccountServiceImpl::new(
+            repository_service,
+            cipher(),
+            Arc::new(MockRawStorageService::new()),
+            Arc::new(MockAttachmentStorageService::new()),
+            event_service,
+        )
     }
 
     fn fake_existing_account(id: u64, user_id: u64) -> Account {
@@ -537,5 +567,137 @@ mod tests {
 
         let svc = make_service_with_storage(repo, raw, attach);
         svc.delete_account(42, 1).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn disable_publishes_accounts_changed() {
+        let mut repo = MockAccountRepository::new();
+        repo.expect_find_by_id_for_user()
+            .returning(|_, user_id, account_id| Box::pin(async move { Ok(Some(fake_existing_account(account_id, user_id))) }));
+        repo.expect_set_enabled()
+            .withf(|_, _id, enabled| !*enabled)
+            .returning(|_, _, _| Box::pin(async { Ok(()) }));
+        repo.expect_set_status()
+            .withf(|_, _id, status, err| *status == AccountStatus::Disabled && err.is_none())
+            .returning(|_, _, _, _| Box::pin(async { Ok(()) }));
+
+        let mut event_svc = MockEventService::new();
+        event_svc.expect_notify_accounts_changed().times(1).return_const(());
+
+        let svc = make_service_with_event(repo, Arc::new(event_svc));
+        svc.disable(42, 1).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn set_status_publishes_accounts_changed() {
+        let mut repo = MockAccountRepository::new();
+        repo.expect_set_status()
+            .withf(|_, _id, status, err| *status == AccountStatus::Syncing && err.is_none())
+            .returning(|_, _, _, _| Box::pin(async { Ok(()) }));
+
+        let mut event_svc = MockEventService::new();
+        event_svc.expect_notify_accounts_changed().times(1).return_const(());
+
+        let svc = make_service_with_event(repo, Arc::new(event_svc));
+        svc.set_status(1, AccountStatus::Syncing, None).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn create_account_does_not_publish_on_validation_error() {
+        let repo = MockAccountRepository::new();
+
+        let mut event_svc = MockEventService::new();
+        event_svc.expect_notify_accounts_changed().never();
+
+        let svc = make_service_with_event(repo, Arc::new(event_svc));
+        let mut p = make_params(42, "pw");
+        p.display_name = "  ".into();
+        let err = svc.create_account(p).await;
+        assert!(matches!(err, Err(Error::Validation(_))));
+    }
+
+    #[tokio::test]
+    async fn enable_publishes_accounts_changed() {
+        let mut repo = MockAccountRepository::new();
+        repo.expect_find_by_id_for_user()
+            .returning(|_, user_id, account_id| Box::pin(async move { Ok(Some(fake_existing_account(account_id, user_id))) }));
+        repo.expect_set_enabled()
+            .withf(|_, _id, enabled| *enabled)
+            .returning(|_, _, _| Box::pin(async { Ok(()) }));
+        repo.expect_set_status()
+            .withf(|_, _id, status, err| *status == AccountStatus::PendingFirstSync && err.is_none())
+            .returning(|_, _, _, _| Box::pin(async { Ok(()) }));
+
+        let mut event_svc = MockEventService::new();
+        event_svc.expect_notify_accounts_changed().times(1).return_const(());
+
+        let svc = make_service_with_event(repo, Arc::new(event_svc));
+        svc.enable(42, 1).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn create_account_publishes_accounts_changed() {
+        let mut repo = MockAccountRepository::new();
+        repo.expect_insert().returning(|_, na| {
+            let mut a = fake_existing_account(na.token.id(), na.user_id);
+            a.credentials = na.credentials;
+            Box::pin(async move { Ok(a) })
+        });
+
+        let mut event_svc = MockEventService::new();
+        event_svc.expect_notify_accounts_changed().times(1).return_const(());
+
+        let svc = make_service_with_event(repo, Arc::new(event_svc));
+        svc.create_account(make_params(42, "hunter2")).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn delete_account_publishes_accounts_changed() {
+        let mut repo = MockAccountRepository::new();
+        repo.expect_find_by_id_for_user()
+            .returning(|_, user_id, account_id| Box::pin(async move { Ok(Some(fake_existing_account(account_id, user_id))) }));
+        repo.expect_delete().returning(|_, acct| Box::pin(async move { Ok(acct) }));
+
+        let mut raw = MockRawStorageService::new();
+        raw.expect_delete_account().with(eq(1u64)).times(1).returning(|_| Box::pin(async { Ok(()) }));
+
+        let mut attach = MockAttachmentStorageService::new();
+        attach.expect_delete_account().with(eq(1u64)).times(1).returning(|_| Box::pin(async { Ok(()) }));
+
+        let mut event_svc = MockEventService::new();
+        event_svc.expect_notify_accounts_changed().times(1).return_const(());
+
+        let repository_service = Arc::new(
+            default_repository_service_builder()
+                .account_repository(Arc::new(repo))
+                .build()
+                .expect("all fields provided"),
+        );
+        let svc = AccountServiceImpl::new(repository_service, cipher(), Arc::new(raw), Arc::new(attach), Arc::new(event_svc));
+        svc.delete_account(42, 1).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn update_account_does_not_publish() {
+        let mut repo = MockAccountRepository::new();
+        repo.expect_find_by_id_for_user()
+            .returning(|_, user_id, account_id| Box::pin(async move { Ok(Some(fake_existing_account(account_id, user_id))) }));
+        repo.expect_update().returning(|_, acct| Box::pin(async move { Ok(acct) }));
+
+        let mut event_svc = MockEventService::new();
+        event_svc.expect_notify_accounts_changed().never();
+
+        let svc = make_service_with_event(repo, Arc::new(event_svc));
+        svc.update_account(
+            42,
+            1,
+            0,
+            PartialAccountInput {
+                display_name: Some("Renamed".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
     }
 }
