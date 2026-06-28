@@ -34,6 +34,7 @@ impl ParseMessageHandler {
 impl JobHandler for ParseMessageHandler {
     const JOB_TYPE: &'static str = "parse_message";
     const DISPLAY_NAME: &'static str = "Parse message";
+    const QUIET: bool = true;
     type Payload = ParseMessageJob;
 
     async fn handle(&self, payload: ParseMessageJob) -> Result<(), Error> {

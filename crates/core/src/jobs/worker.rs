@@ -96,6 +96,8 @@ impl IntoSubsystem<Error> for JobWorker {
             // Dispatch the job's handler, then commit success/failure.
             let job_type = job.job_type.clone();
             let payload = job.payload.clone();
+            let job_id = job.id;
+            let started = std::time::Instant::now();
 
             match job_service.dispatch(&job_type, payload).await {
                 Ok(()) => {
@@ -106,7 +108,14 @@ impl IntoSubsystem<Error> for JobWorker {
                     })
                     .await
                     {
-                        Ok(_) => {}
+                        Ok(_) => {
+                            let elapsed_ms = started.elapsed().as_millis() as u64;
+                            if job_service.handler_quiet(&job_type) {
+                                tracing::debug!(job_type, job_id, elapsed_ms, "job completed");
+                            } else {
+                                tracing::info!(job_type, job_id, elapsed_ms, "job completed");
+                            }
+                        }
                         Err(e) if e.is_transient() => {
                             tracing::warn!("DB unavailable in worker (complete), pausing 10s: {e}");
                             tokio::select! {
@@ -122,7 +131,7 @@ impl IntoSubsystem<Error> for JobWorker {
                 }
                 Err(e) => {
                     let terminal = !e.is_transient();
-                    tracing::error!(job_type, error = %e, terminal, "job handler failed");
+                    tracing::error!(job_type, job_id, error = %e, terminal, "job handler failed");
                     let msg = e.to_string();
                     let job_repo = job_repo.clone();
                     match transaction(&*repository, |tx| {

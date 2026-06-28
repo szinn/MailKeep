@@ -9,6 +9,9 @@ use crate::Error;
 pub trait JobHandler: Send + Sync + 'static {
     const JOB_TYPE: &'static str;
     const DISPLAY_NAME: &'static str;
+    /// High-volume per-record jobs set this `true` so their completion logs at
+    /// DEBUG instead of INFO. Defaults to `false` (control jobs log at INFO).
+    const QUIET: bool = false;
     type Payload: DeserializeOwned + Send;
 
     fn handle(&self, payload: Self::Payload) -> impl Future<Output = Result<(), Error>> + Send;
@@ -23,6 +26,8 @@ pub trait ErasedJobHandler: Send + Sync {
     fn job_type(&self) -> &str;
     /// Human-readable display name for this handler.
     fn display_name(&self) -> &str;
+    /// Whether this handler is high-volume and should log completion at DEBUG.
+    fn quiet(&self) -> bool;
     fn handle<'a>(&'a self, payload: serde_json::Value) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>>;
 }
 
@@ -33,6 +38,10 @@ impl<H: JobHandler> ErasedJobHandler for H {
 
     fn display_name(&self) -> &str {
         H::DISPLAY_NAME
+    }
+
+    fn quiet(&self) -> bool {
+        H::QUIET
     }
 
     fn handle<'a>(&'a self, payload: serde_json::Value) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>> {
@@ -93,5 +102,30 @@ mod tests {
         let result = erased.handle(serde_json::json!({})).await;
 
         assert!(matches!(result, Err(Error::Infrastructure(_))));
+    }
+
+    struct QuietHandler;
+
+    impl JobHandler for QuietHandler {
+        const JOB_TYPE: &'static str = "test.quiet";
+        const DISPLAY_NAME: &'static str = "Quiet Handler";
+        const QUIET: bool = true;
+        type Payload = TestPayload;
+
+        async fn handle(&self, _payload: TestPayload) -> Result<(), Error> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn quiet_flag_reflects_const() {
+        let loud = TestHandler {
+            observed: Arc::new(Mutex::new(vec![])),
+        };
+        let quiet = QuietHandler;
+        let loud_erased: &dyn ErasedJobHandler = &loud;
+        let quiet_erased: &dyn ErasedJobHandler = &quiet;
+        assert!(!loud_erased.quiet());
+        assert!(quiet_erased.quiet());
     }
 }

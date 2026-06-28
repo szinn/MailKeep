@@ -50,6 +50,11 @@ pub trait JobService: Send + Sync {
     /// Returns an error if no handler is registered for the given type, or if
     /// the handler itself fails.
     async fn dispatch(&self, job_type: &str, payload: serde_json::Value) -> Result<(), Error>;
+
+    /// Whether the handler registered for `job_type` is "quiet" (high-volume,
+    /// per-record work that should log completion at DEBUG rather than INFO).
+    /// Returns `false` if no handler is registered for the type.
+    fn handler_quiet(&self, job_type: &str) -> bool;
 }
 
 /// Extension methods on [`JobService`] for typed enqueueing and registration.
@@ -173,6 +178,11 @@ impl JobService for JobServiceImpl {
                 .clone()
         };
         handler.handle(payload).await
+    }
+
+    fn handler_quiet(&self, job_type: &str) -> bool {
+        let handlers = self.handlers.read().expect("handler lock poisoned");
+        handlers.get(job_type).is_some_and(|h| h.quiet())
     }
 }
 
