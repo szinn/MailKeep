@@ -114,7 +114,7 @@ pub(crate) async fn create_account_and_start(payload: NewAccountDto) -> Result<A
 
     core_services.imap_account_service.start_account(account.id).await.map_err(to_server_err)?;
 
-    Ok(account_to_summary(&account))
+    Ok(account_to_summary(&account, None))
 }
 
 #[get(
@@ -126,7 +126,9 @@ pub(crate) async fn list_accounts() -> Result<Vec<AccountSummaryDto>, ServerFnEr
     let user = authenticated_user(&auth_session)?;
     let mut accounts = core_services.account_service.list_accounts(user.id()).await.map_err(to_server_err)?;
     accounts.sort_by_key(|a| a.display_name.to_lowercase());
-    Ok(accounts.iter().map(account_to_summary).collect())
+    let ids: Vec<_> = accounts.iter().map(|a| a.id).collect();
+    let last_synced = core_services.folder_service.last_synced_by_account(&ids).await.map_err(to_server_err)?;
+    Ok(accounts.iter().map(|a| account_to_summary(a, last_synced.get(&a.id).copied())).collect())
 }
 
 #[get(

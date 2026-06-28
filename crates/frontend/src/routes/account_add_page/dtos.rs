@@ -149,13 +149,13 @@ mod mapping {
         }
     }
 
-    pub(crate) fn account_to_summary(a: &Account) -> AccountSummaryDto {
+    pub(crate) fn account_to_summary(a: &Account, last_synced_at: Option<DateTime<Utc>>) -> AccountSummaryDto {
         AccountSummaryDto {
             token: a.token.to_string(),
             display_name: a.display_name.clone(),
             email: a.email_address.as_str().to_string(),
             status: a.status.as_str().to_string(),
-            last_synced: a.last_synced_at.map(|t| relative_time(t, Utc::now())),
+            last_synced: last_synced_at.map(|t| relative_time(t, Utc::now())),
             last_error: if a.status == mk_core::account::AccountStatus::Error {
                 a.last_error.clone()
             } else {
