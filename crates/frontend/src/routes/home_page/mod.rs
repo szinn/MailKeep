@@ -37,7 +37,7 @@ pub(crate) fn HomePage() -> Element {
         }
     });
 
-    let mut refresh = use_signal(|| 0u32);
+    let refresh = use_signal(|| 0u32);
     let accounts = use_resource(move || {
         let _ = refresh(); // subscribe: bumping refresh re-runs list_accounts
         let _ = ACCOUNTS_REVISION(); // MK-19: server-pushed account changes
@@ -75,16 +75,11 @@ pub(crate) fn HomePage() -> Element {
                         },
                     }
                 }
-                div { class: "border-t border-gray-200 p-3 space-y-2 dark:border-slate-700",
+                div { class: "border-t border-gray-200 p-3 dark:border-slate-700",
                     button {
                         class: "w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700",
                         onclick: move |_| { navigator.push(Route::AccountAddPage {}); },
                         "+ Add account"
-                    }
-                    button {
-                        class: "w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700",
-                        onclick: move |_| { refresh += 1; },
-                        "Refresh"
                     }
                 }
             }
