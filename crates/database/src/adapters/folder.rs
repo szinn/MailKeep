@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
 use mk_core::{
     Error, RepositoryError,
@@ -5,7 +7,9 @@ use mk_core::{
     folder::{Folder, FolderId, FolderRepository, FolderToken, NewFolderRow, SpecialUse},
     repository::Transaction,
 };
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, ModelTrait, QueryFilter};
+use sea_orm::{
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, FromQueryResult, ModelTrait, QueryFilter, QuerySelect, prelude::DateTimeWithTimeZone,
+};
 
 use crate::{
     entities::{folders, prelude},
@@ -35,6 +39,12 @@ impl From<folders::Model> for Folder {
             updated_at: model.updated_at.with_timezone(&Utc),
         }
     }
+}
+
+#[derive(FromQueryResult)]
+struct MaxLastSyncedRow {
+    account_id: i64,
+    max_last_synced: Option<DateTimeWithTimeZone>,
 }
 
 pub(crate) struct FolderRepositoryAdapter;
@@ -137,6 +147,31 @@ impl FolderRepository for FolderRepositoryAdapter {
             .await
             .map_err(handle_dberr)?;
         Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn max_last_synced_by_account(&self, transaction: &dyn Transaction, account_ids: &[AccountId]) -> Result<HashMap<AccountId, DateTime<Utc>>, Error> {
+        if account_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+        let ids: Vec<i64> = account_ids.iter().map(|&id| id as i64).collect();
+        let rows = prelude::Folders::find()
+            .select_only()
+            .column(folders::Column::AccountId)
+            .column_as(folders::Column::LastSyncedAt.max(), "max_last_synced")
+            .filter(folders::Column::AccountId.is_in(ids))
+            .group_by(folders::Column::AccountId)
+            .into_model::<MaxLastSyncedRow>()
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+        let mut map = HashMap::with_capacity(rows.len());
+        for row in rows {
+            if let Some(ts) = row.max_last_synced {
+                map.insert(row.account_id as AccountId, ts.with_timezone(&Utc));
+            }
+        }
+        Ok(map)
     }
 
     async fn update_enabled(&self, transaction: &dyn Transaction, folder_id: FolderId, enabled: bool) -> Result<(), Error> {
@@ -278,6 +313,54 @@ mod tests {
             idle_enabled,
             uidvalidity: None,
         }
+    }
+
+    #[tokio::test]
+    async fn max_last_synced_by_account_returns_per_account_max() {
+        use chrono::Duration;
+
+        let svc = setup().await;
+        let user_id = make_user(&svc, "alice", "alice@example.com").await;
+        let acct_a = make_account(&svc, user_id, "a.com").await;
+        let acct_b = make_account(&svc, user_id, "b.com").await;
+
+        let tx = svc.repository().begin().await.unwrap();
+        let repo = svc.folder_repository();
+
+        let a_folders = repo
+            .create_many(
+                &*tx,
+                acct_a,
+                vec![
+                    new_row(acct_a, "INBOX", Some(SpecialUse::Inbox), true),
+                    new_row(acct_a, "Sent", Some(SpecialUse::Sent), false),
+                    new_row(acct_a, "Drafts", None, false),
+                ],
+            )
+            .await
+            .unwrap();
+        let older = Utc::now() - Duration::hours(2);
+        let newer = Utc::now() - Duration::minutes(5);
+        let inbox = a_folders.iter().find(|f| f.path == "INBOX").unwrap();
+        let sent = a_folders.iter().find(|f| f.path == "Sent").unwrap();
+        repo.update_sync_state(&*tx, inbox.id, 1, 10, older).await.unwrap();
+        repo.update_sync_state(&*tx, sent.id, 1, 20, newer).await.unwrap();
+        // "Drafts" left with last_synced_at = NULL.
+
+        repo.create_many(&*tx, acct_b, vec![new_row(acct_b, "INBOX", Some(SpecialUse::Inbox), true)])
+            .await
+            .unwrap();
+
+        let map = repo.max_last_synced_by_account(&*tx, &[acct_a, acct_b]).await.unwrap();
+
+        let a_ts = map.get(&acct_a).expect("account A should have a max last-synced");
+        assert!((*a_ts - newer).num_seconds().abs() <= 1, "expected ~{newer}, got {a_ts}");
+        assert!(!map.contains_key(&acct_b));
+
+        let empty = repo.max_last_synced_by_account(&*tx, &[]).await.unwrap();
+        assert!(empty.is_empty());
+
+        tx.commit().await.unwrap();
     }
 
     #[tokio::test]

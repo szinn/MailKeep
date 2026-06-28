@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
 
 use crate::{
@@ -30,6 +32,11 @@ pub trait FolderRepository: Send + Sync {
     async fn list_for_account(&self, transaction: &dyn Transaction, account_id: AccountId) -> Result<Vec<Folder>, Error>;
 
     async fn list_enabled_for_account(&self, transaction: &dyn Transaction, account_id: AccountId) -> Result<Vec<Folder>, Error>;
+
+    /// Returns `account_id -> max(last_synced_at)` for the given accounts, in a
+    /// single grouped query. Accounts with no folders or no synced folders are
+    /// absent from the map. An empty `account_ids` returns an empty map.
+    async fn max_last_synced_by_account(&self, transaction: &dyn Transaction, account_ids: &[AccountId]) -> Result<HashMap<AccountId, DateTime<Utc>>, Error>;
 
     async fn update_enabled(&self, transaction: &dyn Transaction, folder_id: FolderId, enabled: bool) -> Result<(), Error>;
 
