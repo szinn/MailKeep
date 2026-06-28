@@ -335,6 +335,9 @@ pub(crate) async fn sync_folder(
         last_uid = 0;
     }
 
+    let start_uid = last_uid;
+    let mut ingested: u32 = 0;
+
     status.lock().await.state = SyncState::Syncing;
 
     // Upper bound: nothing above `uid_next - 1` exists yet. When the server does
@@ -348,6 +351,7 @@ pub(crate) async fn sync_folder(
         && upper < from
     {
         // Nothing new to fetch.
+        tracing::debug!(account_id, folder = %folder.path, last_uid = high, "folder sync: no new messages");
         return Ok((high, server_uidvalidity));
     }
 
@@ -384,7 +388,9 @@ pub(crate) async fn sync_folder(
                     .await?;
                 high = high.max(uid);
                 fetched_any = true;
+                ingested += 1;
                 status.lock().await.messages_ingested_session += 1;
+                tracing::debug!(account_id, folder = %folder.path, uid, "ingested message");
             }
         }
 
@@ -402,6 +408,18 @@ pub(crate) async fn sync_folder(
         from = to.saturating_add(1);
     }
 
+    if ingested > 0 {
+        tracing::info!(
+            account_id,
+            folder = %folder.path,
+            new = ingested,
+            last_uid_from = start_uid,
+            last_uid_to = high,
+            "folder sync: new messages"
+        );
+    } else {
+        tracing::debug!(account_id, folder = %folder.path, last_uid = high, "folder sync: no new messages");
+    }
     Ok((high, server_uidvalidity))
 }
 
