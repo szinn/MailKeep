@@ -107,15 +107,24 @@ impl ImapAccountServiceImpl {
             server: account.server.clone(),
             credentials: creds,
             folders: folders.iter().map(Self::folder_config).collect(),
+            account_label: account.log_label(),
         };
         match self.port.start_account(account.id, params).await {
             Ok(()) => {
                 self.account_service.set_status(account.id, AccountStatus::Syncing, None).await?;
+                tracing::info!(account = %account.log_label(), status = ?AccountStatus::Syncing, "account status changed");
                 Ok(())
             }
             Err(e) => {
                 // Best-effort: record the failure; do not mask the original error.
-                let _ = self.account_service.set_status(account.id, AccountStatus::Error, Some(e.to_string())).await;
+                if self
+                    .account_service
+                    .set_status(account.id, AccountStatus::Error, Some(e.to_string()))
+                    .await
+                    .is_ok()
+                {
+                    tracing::info!(account = %account.log_label(), status = ?AccountStatus::Error, last_error = %e, "account status changed");
+                }
                 Err(e)
             }
         }
@@ -154,7 +163,7 @@ impl ImapAccountService for ImapAccountServiceImpl {
         stream::iter(accounts)
             .for_each_concurrent(4, |account| async move {
                 if let Err(e) = self.start_one(&account).await {
-                    tracing::warn!(account_id = account.id, error = %e, "failed to start account sync");
+                    tracing::warn!(account = %account.log_label(), error = %e, "failed to start account sync");
                 }
             })
             .await;
@@ -211,8 +220,8 @@ impl ImapAccountService for ImapAccountServiceImpl {
                 SyncState::Syncing | SyncState::Connecting => AccountStatus::Syncing,
                 SyncState::NotRunning => continue,
             };
-            if account.status != desired {
-                let _ = self.account_service.set_status(account.id, desired, live.last_error.clone()).await;
+            if account.status != desired && self.account_service.set_status(account.id, desired, live.last_error.clone()).await.is_ok() {
+                tracing::info!(account = %account.log_label(), status = ?desired, last_error = live.last_error.as_deref(), "account status changed");
             }
         }
 

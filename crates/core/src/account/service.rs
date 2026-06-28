@@ -151,7 +151,7 @@ impl AccountService for AccountServiceImpl {
         };
         let account = with_transaction!(self, account_repository, |tx| account_repository.insert(tx, new_account).await)?;
         self.event_service.notify_accounts_changed();
-        tracing::info!(account_id = account.id, "account created");
+        tracing::info!(account = %account.log_label(), "account created");
         Ok(account)
     }
 
@@ -198,40 +198,42 @@ impl AccountService for AccountServiceImpl {
     }
 
     async fn enable(&self, user_id: UserId, account_id: AccountId) -> Result<(), Error> {
-        with_transaction!(self, account_repository, |tx| {
-            account_repository
+        let account = with_transaction!(self, account_repository, |tx| {
+            let account = account_repository
                 .find_by_id_for_user(tx, user_id, account_id)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
             account_repository.set_enabled(tx, account_id, true).await?;
-            account_repository.set_status(tx, account_id, AccountStatus::PendingFirstSync, None).await
+            account_repository.set_status(tx, account_id, AccountStatus::PendingFirstSync, None).await?;
+            Ok(account)
         })?;
         self.event_service.notify_accounts_changed();
-        tracing::info!(account_id, "account enabled");
+        tracing::info!(account = %account.log_label(), "account enabled");
         Ok(())
     }
 
     async fn disable(&self, user_id: UserId, account_id: AccountId) -> Result<(), Error> {
-        with_transaction!(self, account_repository, |tx| {
-            account_repository
+        let account = with_transaction!(self, account_repository, |tx| {
+            let account = account_repository
                 .find_by_id_for_user(tx, user_id, account_id)
                 .await?
                 .ok_or(Error::RepositoryError(RepositoryError::NotFound))?;
             account_repository.set_enabled(tx, account_id, false).await?;
-            account_repository.set_status(tx, account_id, AccountStatus::Disabled, None).await
+            account_repository.set_status(tx, account_id, AccountStatus::Disabled, None).await?;
+            Ok(account)
         })?;
         self.event_service.notify_accounts_changed();
-        tracing::info!(account_id, "account disabled");
+        tracing::info!(account = %account.log_label(), "account disabled");
         Ok(())
     }
 
     async fn set_status(&self, account_id: AccountId, status: AccountStatus, last_error: Option<String>) -> Result<(), Error> {
-        let logged_error = last_error.clone();
+        // Status-change logging lives at the call sites (start_one, reconcile),
+        // which have the full Account for a readable label.
         with_transaction!(self, account_repository, |tx| account_repository
             .set_status(tx, account_id, status, last_error)
             .await)?;
         self.event_service.notify_accounts_changed();
-        tracing::info!(account_id, status = ?status, last_error = logged_error.as_deref(), "account status changed");
         Ok(())
     }
 
@@ -263,7 +265,7 @@ impl AccountService for AccountServiceImpl {
             );
         }
         self.event_service.notify_accounts_changed();
-        tracing::info!(account_id = account_to_delete.id, "account deleted");
+        tracing::info!(account = %account_to_delete.log_label(), "account deleted");
         Ok(())
     }
 

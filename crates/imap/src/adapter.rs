@@ -220,11 +220,13 @@ impl ImapPort for ImapAdapter {
             let tls = self.tls_config.clone();
             let server = params.server.clone();
             let creds = params.credentials.clone();
+            let account_label = params.account_label.clone();
             let status_for_task = status.clone();
             let cancel_for_task = cancel.clone();
             tasks.spawn(async move {
                 idle_task(
                     account_id,
+                    account_label,
                     server,
                     creds,
                     idle_folder,
@@ -250,11 +252,13 @@ impl ImapPort for ImapAdapter {
             let poll_interval = self.poll_interval;
             let server = params.server.clone();
             let creds = params.credentials.clone();
+            let account_label = params.account_label.clone();
             let status_for_task = status.clone();
             let cancel_for_task = cancel.clone();
             tasks.spawn(async move {
                 poll_task(
                     account_id,
+                    account_label,
                     server,
                     creds,
                     poll_folders,

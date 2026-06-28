@@ -42,6 +42,14 @@ impl AccountStatus {
     }
 }
 
+impl Account {
+    /// Human-readable identity for log lines: `A_xxx: Display Name (email)`.
+    #[must_use]
+    pub fn log_label(&self) -> String {
+        format!("{}: {} ({})", self.token, self.display_name, self.email_address)
+    }
+}
+
 /// Plaintext credential envelope. Serialized to JSON, then encrypted with
 /// AAD = account_id into a `Ciphertext`. Self-describing — new auth variants
 /// slot in without schema backfill.

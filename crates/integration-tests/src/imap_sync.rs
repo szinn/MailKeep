@@ -185,6 +185,7 @@ fn params_for(server: ImapServerConfig, folders: &[&Folder]) -> ImapConnectionPa
                 last_uid: f.last_uid,
             })
             .collect(),
+        account_label: "A_test: Test (t@e.st)".to_string(),
     }
 }
 
@@ -413,6 +414,7 @@ async fn uidvalidity_rollover_drops_locations_and_reingests() {
                 server: gm.server(),
                 credentials: creds(),
                 folders: vec![restart_folder],
+                account_label: "A_test: Test (t@e.st)".to_string(),
             },
         )
         .await
@@ -539,6 +541,7 @@ async fn bad_credentials_surface_failure_signal() {
             uidvalidity: inbox.uidvalidity,
             last_uid: inbox.last_uid,
         }],
+        account_label: "A_test: Test (t@e.st)".to_string(),
     };
     adapter.start_account(account_id, bad).await.unwrap();
 

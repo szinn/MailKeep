@@ -98,6 +98,7 @@ fn backoff_delay(consecutive_failures: u32) -> Duration {
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn poll_task(
     account_id: AccountId,
+    account_label: String,
     server: ImapServerConfig,
     creds: ImapCredentials,
     folders_cfg: Vec<FolderConfig>,
@@ -130,11 +131,11 @@ pub(crate) async fn poll_task(
                 if cancel.is_cancelled() {
                     break;
                 }
-                sync_folder(&mut session, account_id, folder, &ingest, &folders, &messages, &status).await?;
+                sync_folder(&mut session, account_id, &account_label, folder, &ingest, &folders, &messages, &status).await?;
             }
             // Best-effort logout; failure here is benign.
             if let Err(e) = session.logout().await {
-                tracing::debug!(account_id, ?e, "IMAP logout failed after poll pass");
+                tracing::debug!(account = %account_label, ?e, "IMAP logout failed after poll pass");
             }
             Ok(())
         }
@@ -151,7 +152,7 @@ pub(crate) async fn poll_task(
             }
             Err(e) => {
                 failures = failures.saturating_add(1);
-                tracing::warn!(account_id, failures, error = %e, "poll pass failed");
+                tracing::warn!(account = %account_label, failures, error = %e, "poll pass failed");
                 {
                     let mut s = status.lock().await;
                     if failures >= FAILURE_ERROR_THRESHOLD {
@@ -188,6 +189,7 @@ pub(crate) async fn poll_task(
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn idle_task(
     account_id: AccountId,
+    account_label: String,
     server: ImapServerConfig,
     creds: ImapCredentials,
     folder: FolderConfig,
@@ -231,7 +233,7 @@ pub(crate) async fn idle_task(
                     return Ok(());
                 }
 
-                let (high, server_uidvalidity) = sync_folder(&mut session, account_id, &cur, &ingest, &folders, &messages, &status).await?;
+                let (high, server_uidvalidity) = sync_folder(&mut session, account_id, &account_label, &cur, &ingest, &folders, &messages, &status).await?;
                 cur.last_uid = high;
                 cur.uidvalidity = Some(server_uidvalidity);
 
@@ -285,7 +287,7 @@ pub(crate) async fn idle_task(
             Ok(()) => break, // cancelled cleanly
             Err(e) => {
                 failures = failures.saturating_add(1);
-                tracing::warn!(account_id, failures, folder = %folder.path, error = %e, "IDLE connection failed");
+                tracing::warn!(account = %account_label, failures, folder = %folder.path, error = %e, "IDLE connection failed");
                 {
                     let mut s = status.lock().await;
                     if failures >= FAILURE_ERROR_THRESHOLD {
@@ -310,6 +312,7 @@ pub(crate) async fn idle_task(
 pub(crate) async fn sync_folder(
     session: &mut ImapSession,
     account_id: AccountId,
+    account_label: &str,
     folder: &FolderConfig,
     ingest: &Arc<dyn IngestService>,
     folders: &Arc<dyn FolderService>,
@@ -351,7 +354,7 @@ pub(crate) async fn sync_folder(
         && upper < from
     {
         // Nothing new to fetch.
-        tracing::debug!(account_id, folder = %folder.path, last_uid = high, "folder sync: no new messages");
+        tracing::debug!(account = account_label, folder = %folder.path, last_uid = high, "folder sync: no new messages");
         return Ok((high, server_uidvalidity));
     }
 
@@ -390,7 +393,7 @@ pub(crate) async fn sync_folder(
                 fetched_any = true;
                 ingested += 1;
                 status.lock().await.messages_ingested_session += 1;
-                tracing::debug!(account_id, folder = %folder.path, uid, "ingested message");
+                tracing::debug!(account = account_label, folder = %folder.path, uid, "ingested message");
             }
         }
 
@@ -410,7 +413,7 @@ pub(crate) async fn sync_folder(
 
     if ingested > 0 {
         tracing::info!(
-            account_id,
+            account = account_label,
             folder = %folder.path,
             new = ingested,
             last_uid_from = start_uid,
@@ -418,7 +421,7 @@ pub(crate) async fn sync_folder(
             "folder sync: new messages"
         );
     } else {
-        tracing::debug!(account_id, folder = %folder.path, last_uid = high, "folder sync: no new messages");
+        tracing::debug!(account = account_label, folder = %folder.path, last_uid = high, "folder sync: no new messages");
     }
     Ok((high, server_uidvalidity))
 }

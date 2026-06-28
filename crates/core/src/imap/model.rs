@@ -42,6 +42,8 @@ pub struct ImapConnectionParams {
     pub server: ImapServerConfig,
     pub credentials: ImapCredentials,
     pub folders: Vec<FolderConfig>,
+    /// Human-readable account label for log lines (see `Account::log_label`).
+    pub account_label: String,
 }
 
 /// One enabled folder's sync cursor. Defined now, exercised in MK-7.
