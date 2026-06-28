@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use chrono::{DateTime, Utc};
 
@@ -29,6 +29,11 @@ pub trait FolderService: Send + Sync {
     async fn record_sync_progress(&self, folder_id: FolderId, uidvalidity: u32, last_uid: u32, last_synced_at: DateTime<Utc>) -> Result<(), Error>;
 
     async fn delete_folder(&self, folder_id: FolderId) -> Result<(), Error>;
+
+    /// Per-account `max(folders.last_synced_at)` for the given accounts,
+    /// derived from folder-level sync progress. Accounts with no synced
+    /// folders are absent from the returned map.
+    async fn last_synced_by_account(&self, account_ids: &[AccountId]) -> Result<HashMap<AccountId, DateTime<Utc>>, Error>;
 }
 
 pub(crate) struct FolderServiceImpl {
@@ -87,6 +92,13 @@ impl FolderService for FolderServiceImpl {
 
     async fn delete_folder(&self, folder_id: FolderId) -> Result<(), Error> {
         with_transaction!(self, folder_repository, |tx| folder_repository.delete_by_id(tx, folder_id).await)
+    }
+
+    async fn last_synced_by_account(&self, account_ids: &[AccountId]) -> Result<HashMap<AccountId, DateTime<Utc>>, Error> {
+        let account_ids = account_ids.to_vec();
+        with_read_only_transaction!(self, folder_repository, |tx| folder_repository
+            .max_last_synced_by_account(tx, &account_ids)
+            .await)
     }
 }
 
@@ -232,5 +244,26 @@ mod tests {
 
         let svc = setup_with_folder_repo(repo);
         svc.record_sync_progress(5, 100, 999, when).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn last_synced_by_account_delegates_to_repo() {
+        use std::collections::HashMap;
+
+        let when = Utc::now();
+        let mut repo = MockFolderRepository::new();
+        repo.expect_max_last_synced_by_account()
+            .withf(|_tx, ids| ids == [7, 9])
+            .times(1)
+            .returning(move |_, _| {
+                let mut m = HashMap::new();
+                m.insert(7u64, when);
+                Box::pin(async move { Ok(m) })
+            });
+
+        let svc = setup_with_folder_repo(repo);
+        let out = svc.last_synced_by_account(&[7, 9]).await.unwrap();
+        assert_eq!(out.get(&7), Some(&when));
+        assert!(!out.contains_key(&9));
     }
 }

@@ -6,7 +6,7 @@
 //! sync method is ever reached — they exist only so the probe-only adapter can
 //! be constructed. They are never wired into production sync.
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -58,6 +58,10 @@ impl FolderService for NopFolderService {
     }
 
     async fn delete_folder(&self, _folder_id: FolderId) -> Result<(), Error> {
+        unimplemented!("{PANIC_MSG}")
+    }
+
+    async fn last_synced_by_account(&self, _account_ids: &[AccountId]) -> Result<HashMap<AccountId, DateTime<Utc>>, Error> {
         unimplemented!("{PANIC_MSG}")
     }
 }
