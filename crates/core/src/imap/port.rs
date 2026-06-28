@@ -16,4 +16,10 @@ pub trait ImapPort: Send + Sync {
     async fn start_account(&self, account_id: AccountId, params: ImapConnectionParams) -> Result<(), Error>;
     async fn stop_account(&self, account_id: AccountId) -> Result<(), Error>;
     async fn status(&self, account_id: AccountId) -> Result<SyncStatus, Error>;
+
+    /// Snapshot of the account ids the adapter currently has live sync tasks
+    /// for. This is the authoritative running set; it can diverge from
+    /// `AccountService::list_enabled()` when an account is disabled while its
+    /// tasks are still running.
+    async fn tracked_accounts(&self) -> Vec<AccountId>;
 }

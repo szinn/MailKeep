@@ -289,6 +289,10 @@ impl ImapPort for ImapAdapter {
             None => Ok(not_running_status()),
         }
     }
+
+    async fn tracked_accounts(&self) -> Vec<AccountId> {
+        self.tracked.lock().await.keys().copied().collect()
+    }
 }
 
 #[cfg(test)]
@@ -341,5 +345,11 @@ mod tests {
     fn typed_sent_flows_through_core_special_use() {
         let attrs = vec![normalize_attribute(&NameAttribute::Sent)];
         assert_eq!(special_use_from_attributes("[Gmail]/Sent Mail", &attrs), Some(SpecialUse::Sent));
+    }
+
+    #[tokio::test]
+    async fn fresh_adapter_tracks_no_accounts() {
+        let adapter = ImapAdapter::probe();
+        assert!(adapter.tracked_accounts().await.is_empty());
     }
 }

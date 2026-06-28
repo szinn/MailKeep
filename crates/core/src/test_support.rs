@@ -81,6 +81,9 @@ impl ImapPort for NopImapPort {
     async fn status(&self, _account_id: AccountId) -> Result<SyncStatus, Error> {
         Err(Error::Unimplemented("NopImapPort::status"))
     }
+    async fn tracked_accounts(&self) -> Vec<AccountId> {
+        Vec::new()
+    }
 }
 
 /// Returns a `CipherService` backed by a fixed test key. Suitable for any
