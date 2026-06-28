@@ -18,8 +18,9 @@ use crate::{
 /// forward to the port; the lifecycle methods (`start_account`, `stop_account`,
 /// `status`, `start_all_enabled`, `stop_all`) orchestrate account loading,
 /// credential decryption, status persistence, and the port.
-/// `reconcile_statuses` maps each tracked account's live `SyncState` to a
-/// persisted `AccountStatus`.
+/// `reconcile_statuses` maps each enabled account's live `SyncState` to a
+/// persisted `AccountStatus`, and stops any account that is still tracked
+/// but no longer enabled (the disable-while-running teardown backstop).
 ///
 /// Note: `start_all_enabled`/`stop_all`/`reconcile_statuses` are
 /// service-orchestration methods (they iterate over accounts) and have no 1:1
@@ -159,13 +160,31 @@ impl ImapAccountService for ImapAccountServiceImpl {
     }
 
     async fn stop_all(&self) -> Result<(), Error> {
+        use std::collections::HashSet;
+
         use futures::stream::{self, StreamExt};
 
-        let accounts = self.account_service.list_enabled().await?;
-        stream::iter(accounts)
-            .for_each_concurrent(4, |account| async move {
-                if let Err(e) = self.port.stop_account(account.id).await {
-                    tracing::warn!(account_id = account.id, error = %e, "failed to stop account sync");
+        // Stop every account that is actually running. An account disabled while
+        // its sync tasks are live drops out of `list_enabled()` but remains in
+        // the adapter's tracked set, so stop the *union* of the two — not
+        // enabled-only — to guarantee no IDLE/poll task leaks past shutdown.
+        //
+        // The tracked set is authoritative and reachable without the DB. stop_all
+        // runs exactly once at shutdown with no retry, so a DB failure here must
+        // NOT prevent stopping the tracked accounts: degrade to empty-enabled and
+        // still tear down the tracked set.
+        let enabled_ids = match self.account_service.list_enabled().await {
+            Ok(accounts) => accounts.into_iter().map(|a| a.id).collect::<Vec<_>>(),
+            Err(e) => {
+                tracing::warn!(error = %e, "list_enabled failed during stop_all; stopping tracked accounts only");
+                Vec::new()
+            }
+        };
+        let ids: HashSet<AccountId> = enabled_ids.into_iter().chain(self.port.tracked_accounts().await).collect();
+        stream::iter(ids)
+            .for_each_concurrent(4, |id| async move {
+                if let Err(e) = self.port.stop_account(id).await {
+                    tracing::warn!(account_id = id, error = %e, "failed to stop account sync");
                 }
             })
             .await;
@@ -173,8 +192,14 @@ impl ImapAccountService for ImapAccountServiceImpl {
     }
 
     async fn reconcile_statuses(&self) -> Result<(), Error> {
-        let accounts = self.account_service.list_enabled().await?;
-        for account in accounts {
+        use std::collections::HashSet;
+
+        let enabled = self.account_service.list_enabled().await?;
+        let enabled_ids: HashSet<AccountId> = enabled.iter().map(|a| a.id).collect();
+
+        // Enabled accounts: drive the persisted `AccountStatus` toward the live
+        // `SyncState`, writing only when it actually differs.
+        for account in &enabled {
             let Ok(live) = self.port.status(account.id).await else {
                 continue; // untracked / not running
             };
@@ -186,6 +211,18 @@ impl ImapAccountService for ImapAccountServiceImpl {
             };
             if account.status != desired {
                 let _ = self.account_service.set_status(account.id, desired, live.last_error.clone()).await;
+            }
+        }
+
+        // Teardown backstop: an account that is still tracked (running) but no
+        // longer enabled was disabled without a successful `stop_account` (the
+        // frontend stop failed, or a non-frontend path disabled it). Reclaim it
+        // here so its leaked IDLE/poll tasks cannot outlive the disable.
+        for id in self.port.tracked_accounts().await {
+            if !enabled_ids.contains(&id) {
+                if let Err(e) = self.port.stop_account(id).await {
+                    tracing::warn!(account_id = id, error = %e, "failed to stop disabled-but-tracked account");
+                }
             }
         }
         Ok(())
@@ -453,6 +490,65 @@ mod tests {
                 Ok(sync_status(SyncState::Idle, None))
             }
         });
+        port.expect_tracked_accounts().returning(|| vec![1, 2]);
+
+        let svc = create_imap_account_service(Arc::new(port), Arc::new(accounts), Arc::new(MockFolderService::new()), cipher);
+        svc.reconcile_statuses().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn stop_all_stops_union_of_enabled_and_tracked() {
+        let cipher = cipher();
+        let a = account(1, &cipher, "pw");
+
+        let mut accounts = MockAccountService::new();
+        accounts.expect_list_enabled().times(1).return_once(move || Ok(vec![a]));
+
+        let mut port = MockImapPort::new();
+        // Account 1 is enabled; account 2 was disabled while still tracked.
+        // stop_all must cover the union {1, 2}.
+        port.expect_tracked_accounts().times(1).returning(|| vec![1, 2]);
+        port.expect_stop_account().withf(|id| *id == 1 || *id == 2).times(2).returning(|_| Ok(()));
+
+        let svc = create_imap_account_service(Arc::new(port), Arc::new(accounts), Arc::new(MockFolderService::new()), cipher);
+        svc.stop_all().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn stop_all_stops_tracked_when_list_enabled_fails() {
+        let cipher = cipher();
+
+        let mut accounts = MockAccountService::new();
+        accounts
+            .expect_list_enabled()
+            .times(1)
+            .returning(|| Err(Error::Infrastructure("db down".into())));
+
+        let mut port = MockImapPort::new();
+        // DB is unreachable, but the tracked set is still authoritative.
+        port.expect_tracked_accounts().times(1).returning(|| vec![5]);
+        port.expect_stop_account().withf(|id| *id == 5).times(1).returning(|_| Ok(()));
+
+        let svc = create_imap_account_service(Arc::new(port), Arc::new(accounts), Arc::new(MockFolderService::new()), cipher);
+        svc.stop_all().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn reconcile_tears_down_tracked_but_disabled_account() {
+        let cipher = cipher();
+        // Enabled account 1: live Idle == db Idle, so no status write.
+        let mut a = account(1, &cipher, "pw");
+        a.status = AccountStatus::Idle;
+
+        let mut accounts = MockAccountService::new();
+        accounts.expect_list_enabled().times(1).return_once(move || Ok(vec![a]));
+        accounts.expect_set_status().never();
+
+        let mut port = MockImapPort::new();
+        port.expect_status().returning(|_| Ok(sync_status(SyncState::Idle, None)));
+        // Account 2 is still tracked but no longer enabled — the leak case.
+        port.expect_tracked_accounts().times(1).returning(|| vec![1, 2]);
+        port.expect_stop_account().withf(|id| *id == 2).times(1).returning(|_| Ok(()));
 
         let svc = create_imap_account_service(Arc::new(port), Arc::new(accounts), Arc::new(MockFolderService::new()), cipher);
         svc.reconcile_statuses().await.unwrap();
