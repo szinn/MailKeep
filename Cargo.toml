@@ -31,7 +31,7 @@ mk-utils = { path = "crates/utils" }
 mockall = "0.14.0"
 
 # Error handling
-anyhow = "1.0.102"
+anyhow = "1.0.103"
 thiserror = "2.0.18"
 
 # Crypto
