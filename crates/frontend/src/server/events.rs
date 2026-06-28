@@ -18,7 +18,8 @@ use tokio::sync::broadcast::{Receiver, error::RecvError};
 
 use crate::server::AuthSession;
 
-/// Collapse a burst of events into a single client nudge.
+/// Collapse a burst of events into a single client nudge. Also the emission
+/// latency floor: even a lone change waits one window before being sent.
 const DEBOUNCE: Duration = Duration::from_millis(500);
 /// Keep-alive ping interval to defeat idle-proxy timeouts.
 const KEEP_ALIVE_SECS: u64 = 30;

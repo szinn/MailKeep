@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 use crate::server::AuthSession;
 use crate::{
     Route,
-    components::{NavBar, THEME_MODE, theme::get_theme_preference},
+    components::{ACCOUNTS_REVISION, NavBar, THEME_MODE, theme::get_theme_preference},
 };
 
 #[get("/api/v1/check_auth", auth_session: axum::Extension<AuthSession>)]
@@ -94,6 +94,30 @@ fn AuthGate() -> Element {
     use_effect(move || {
         if let Some(Ok(false)) = auth() {
             navigator.replace(Route::LandingPage { login_failed: None });
+        }
+    });
+
+    // MK-19: once authenticated, open a single browser EventSource and bump
+    // ACCOUNTS_REVISION on each server nudge. `started` prevents a second spawn
+    // within one mount; the JS closes any prior connection and rebinds the
+    // listener to the current channel, so logout->login (SPA remount) re-wires
+    // cleanly. No-op on the server (eval/EventSource are client-only).
+    let mut started = use_signal(|| false);
+    use_effect(move || {
+        if matches!(auth(), Some(Ok(true))) && !*started.peek() {
+            started.set(true);
+            spawn(async move {
+                let mut eval = document::eval(
+                    r#"
+                    if (window.__mk_es) { window.__mk_es.close(); }
+                    window.__mk_es = new EventSource('/api/v1/events');
+                    window.__mk_es.addEventListener('accounts_changed', () => { dioxus.send('x'); });
+                    "#,
+                );
+                while eval.recv::<String>().await.is_ok() {
+                    *ACCOUNTS_REVISION.write() += 1;
+                }
+            });
         }
     });
 

@@ -13,6 +13,7 @@ use {crate::routes::server_helpers::authenticated_user, crate::server::AuthSessi
 
 use crate::{
     Route,
+    components::ACCOUNTS_REVISION,
     routes::account_add_page::{dtos::AccountSummaryDto, list_accounts},
 };
 
@@ -39,6 +40,7 @@ pub(crate) fn HomePage() -> Element {
     let mut refresh = use_signal(|| 0u32);
     let accounts = use_resource(move || {
         let _ = refresh(); // subscribe: bumping refresh re-runs list_accounts
+        let _ = ACCOUNTS_REVISION(); // MK-19: server-pushed account changes
         async move { list_accounts().await }
     });
 
