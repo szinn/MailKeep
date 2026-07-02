@@ -288,6 +288,52 @@ async fn initial_sync_ingests_seeded_messages() {
     let _ = core.await;
 }
 
+/// Archiving must be non-destructive to the origin mailbox: fetching a message
+/// body must NOT mark it read on the server. The sync engine fetches with
+/// `BODY.PEEK[]` (not `BODY[]`), so an unread message stays unread after sync.
+///
+/// Seed an unread message, run the full sync, then observe the server's flags
+/// via an independent control session (using `FETCH FLAGS`, which never sets
+/// `\Seen` itself). Regression guard for the `BODY[]` → `BODY.PEEK[]` fix.
+#[tokio::test]
+#[ignore = "needs a docker/colima daemon — run via `just imap-integration-tests`"]
+async fn sync_does_not_mark_messages_seen_on_server() {
+    let gm = Greenmail::start().await;
+    let mut control = Control::connect(&gm).await.unwrap();
+    // APPEND with no flags → the message is UNSEEN on the server.
+    control.append("INBOX", "keep me unread").await.unwrap();
+    // Sanity-check the precondition: nothing is \Seen before sync.
+    assert!(!control.any_seen("INBOX").await.unwrap(), "seeded message must start UNSEEN");
+    let _ = control.logout().await;
+    drop(control);
+
+    let ctx = setup_pipeline().await;
+    let user = make_user(&ctx).await;
+    let account_id = make_account(&ctx, user.id, gm.server()).await;
+    let inbox = make_inbox(&ctx, account_id, false).await;
+    let core = run_core(&ctx);
+
+    let adapter = make_adapter(&ctx, Duration::from_secs(1));
+    adapter.start_account(account_id, params_for(gm.server(), &[&inbox])).await.unwrap();
+
+    // Wait for the pipeline to fully ingest the message (proves the body WAS
+    // fetched — the only way to accidentally set \Seen).
+    let msgs = wait_for_messages(&ctx.repos, account_id, 1, ACCOUNT_TIMEOUT).await;
+    assert_eq!(msgs.len(), 1, "the seeded message must be ingested");
+    assert_ciphertext_on_disk(&ctx, account_id, &msgs[0]).await;
+
+    // Stop the engine so its own sessions can't race the observation, then read
+    // the server-side flags from an independent control session.
+    adapter.stop_account(account_id).await.unwrap();
+    let mut control = Control::connect(&gm).await.unwrap();
+    let seen = control.any_seen("INBOX").await.unwrap();
+    let _ = control.logout().await;
+    assert!(!seen, "fetching the body during sync must NOT mark the message \\Seen on the server");
+
+    core.abort();
+    let _ = core.await;
+}
+
 // ─── Scenario 2: IDLE liveness
 // ────────────────────────────────────────────────
 

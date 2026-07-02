@@ -368,7 +368,13 @@ pub(crate) async fn sync_folder(
         let mut fetched_any = false;
         {
             let mut stream = session
-                .uid_fetch(&range, "(UID FLAGS INTERNALDATE BODY[])")
+                // BODY.PEEK[] (not BODY[]) so fetching the message does NOT
+                // implicitly set the \Seen flag server-side (RFC 3501 §6.4.5).
+                // Archiving must never mark the origin mail as read.
+                // BODY.PEEK[] (not BODY[]) so fetching the message does NOT
+                // implicitly set the \Seen flag server-side (RFC 3501 §6.4.5).
+                // Archiving must never mark the origin mail as read.
+                .uid_fetch(&range, "(UID FLAGS INTERNALDATE BODY.PEEK[])")
                 .await
                 .map_err(|e| Error::Infrastructure(format!("UID FETCH {range} failed: {e}")))?;
             while let Some(item) = stream.next().await {

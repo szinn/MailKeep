@@ -22,6 +22,7 @@
 
 use std::{sync::Arc, time::Duration};
 
+use futures::StreamExt;
 use mk_core::{
     Error,
     account::AccountId,
@@ -179,6 +180,31 @@ impl Control {
             .map_err(|e| Error::Infrastructure(format!("control SELECT {mailbox} failed: {e}")))?;
         mb.uid_validity
             .ok_or_else(|| Error::Infrastructure(format!("control: no UIDVALIDITY for {mailbox}")))
+    }
+
+    /// UID FETCH the FLAGS of every message in `mailbox` and report whether ANY
+    /// message carries the `\Seen` flag. Uses `FETCH FLAGS` (never `BODY[]`),
+    /// so the read itself cannot set `\Seen` — this observes the state the
+    /// system-under-test left behind, without perturbing it.
+    pub(crate) async fn any_seen(&mut self, mailbox: &str) -> Result<bool, Error> {
+        use async_imap::types::Flag;
+        self.session
+            .select(mailbox)
+            .await
+            .map_err(|e| Error::Infrastructure(format!("control SELECT {mailbox} failed: {e}")))?;
+        let mut stream = self
+            .session
+            .uid_fetch("1:*", "FLAGS")
+            .await
+            .map_err(|e| Error::Infrastructure(format!("control UID FETCH FLAGS failed: {e}")))?;
+        let mut seen = false;
+        while let Some(item) = stream.next().await {
+            let fetch = item.map_err(|e| Error::Infrastructure(format!("control FETCH item error: {e}")))?;
+            if fetch.flags().any(|f| f == Flag::Seen) {
+                seen = true;
+            }
+        }
+        Ok(seen)
     }
 
     pub(crate) async fn logout(&mut self) -> Result<(), Error> {

@@ -3505,6 +3505,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "chrono",
+ "futures",
  "mk-core",
  "mk-database",
  "mk-imap",
