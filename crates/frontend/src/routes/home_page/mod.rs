@@ -2,6 +2,7 @@ mod account_actions;
 mod delete_account_modal;
 mod edit_folders_modal;
 mod format;
+mod stats_panel;
 
 use account_actions::set_account_enabled;
 use delete_account_modal::DeleteAccountModal;
