@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4](https://github.com/szinn/MailKeep/compare/v0.1.3..v0.1.4) - 2026-07-03
+
+### Features
+
+- _(core)_ FolderService::last_synced_by_account wrapper - ([a9b820b](https://github.com/szinn/MailKeep/commit/a9b820bc43179193781628b7aa1b194785107bcc))
+- _(core,database)_ Add archive stats domain + StatsRepository adapter - ([b795f6c](https://github.com/szinn/MailKeep/commit/b795f6c8209b3dcfe1c71b417b1a710a35fe4ece))
+- _(database)_ Grouped query for max folder last-synced per account - ([7db1843](https://github.com/szinn/MailKeep/commit/7db18436e1c918d4101de9713debdc3bc1ff9b96))
+- _(frontend)_ Render global archive stats in HomePage right panel - ([dbc6876](https://github.com/szinn/MailKeep/commit/dbc687617d7c04b8e4550e2fc82d69344f278334))
+- _(frontend)_ Add archive_stats server fn + ArchiveStatsDto - ([cbc5d76](https://github.com/szinn/MailKeep/commit/cbc5d7603285426e20c0d22eaf0591d13989d1b5))
+
+### Bug Fixes
+
+- _(frontend)_ Show account last-synced derived from folders - ([9a75a19](https://github.com/szinn/MailKeep/commit/9a75a19698b50687a891190fa2970ce5a9248615))
+
+### Refactor
+
+- _(core,imap)_ Show account token/name in logs - ([d70a941](https://github.com/szinn/MailKeep/commit/d70a9419cacbfd43b3d0320afd248041dd74585a))
+
 ## [0.1.3](https://github.com/szinn/MailKeep/compare/v0.1.2..v0.1.3) - 2026-07-02
 
 ### Bug Fixes
