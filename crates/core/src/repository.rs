@@ -9,6 +9,7 @@ use crate::{
     folder::FolderRepository,
     jobs::JobRepository,
     message::{MessageAttachmentRepository, MessageLocationRepository, MessageRepository},
+    stats::StatsRepository,
     user::{UserRepository, UserSettingRepository},
 };
 
@@ -25,6 +26,7 @@ pub struct RepositoryService {
     message_repository: Arc<dyn MessageRepository>,
     message_location_repository: Arc<dyn MessageLocationRepository>,
     message_attachment_repository: Arc<dyn MessageAttachmentRepository>,
+    stats_repository: Arc<dyn StatsRepository>,
 }
 
 impl RepositoryService {
@@ -86,6 +88,12 @@ impl RepositoryService {
     #[must_use]
     pub fn message_attachment_repository(&self) -> &Arc<dyn MessageAttachmentRepository> {
         &self.message_attachment_repository
+    }
+
+    /// Returns a reference to the stats repository.
+    #[must_use]
+    pub fn stats_repository(&self) -> &Arc<dyn StatsRepository> {
+        &self.stats_repository
     }
 }
 
@@ -220,6 +228,7 @@ pub(crate) mod testing {
         folder::repository::MockFolderRepository,
         jobs::repository::MockJobRepository,
         message::repository::{MockMessageAttachmentRepository, MockMessageLocationRepository, MockMessageRepository},
+        stats::repository::MockStatsRepository,
         user::repository::{user::MockUserRepository, user_settings::MockUserSettingRepository},
     };
 
@@ -267,5 +276,6 @@ pub(crate) mod testing {
             .message_repository(Arc::new(MockMessageRepository::new()))
             .message_location_repository(Arc::new(MockMessageLocationRepository::new()))
             .message_attachment_repository(Arc::new(MockMessageAttachmentRepository::new()))
+            .stats_repository(Arc::new(MockStatsRepository::new()))
     }
 }

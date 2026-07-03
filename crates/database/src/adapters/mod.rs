@@ -5,6 +5,7 @@ pub(crate) mod message;
 pub(crate) mod message_attachment;
 pub(crate) mod message_location;
 pub(crate) mod session;
+pub(crate) mod stats;
 pub(crate) mod user;
 pub(crate) mod user_settings;
 

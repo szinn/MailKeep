@@ -18,6 +18,7 @@ use mk_core::{
     jobs::JobRepository,
     message::{MessageAttachmentRepository, MessageLocationRepository, MessageRepository},
     repository::{Repository, RepositoryService, RepositoryServiceBuilder},
+    stats::StatsRepository,
     user::{UserRepository, UserSettingRepository},
 };
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
@@ -37,7 +38,7 @@ use crate::{
     adapters::{
         account::AccountRepositoryAdapter, folder::FolderRepositoryAdapter, jobs::JobRepositoryAdapter, message::MessageRepositoryAdapter,
         message_attachment::MessageAttachmentRepositoryAdapter, message_location::MessageLocationRepositoryAdapter, session::SessionRepositoryAdapter,
-        user::UserRepositoryAdapter, user_settings::UserSettingRepositoryAdapter,
+        stats::StatsRepositoryAdapter, user::UserRepositoryAdapter, user_settings::UserSettingRepositoryAdapter,
     },
     migrations::Migrator,
     repository::RepositoryImpl,
@@ -95,6 +96,7 @@ pub async fn create_repository_service(database: DatabaseConnection) -> Result<A
         .message_repository(Arc::new(MessageRepositoryAdapter::new()) as Arc<dyn MessageRepository>)
         .message_location_repository(Arc::new(MessageLocationRepositoryAdapter::new()) as Arc<dyn MessageLocationRepository>)
         .message_attachment_repository(Arc::new(MessageAttachmentRepositoryAdapter::new()) as Arc<dyn MessageAttachmentRepository>)
+        .stats_repository(Arc::new(StatsRepositoryAdapter::new()) as Arc<dyn StatsRepository>)
         .build()
         .map_err(|e| Error::Infrastructure(e.to_string()))?;
 

@@ -9,6 +9,7 @@ pub mod ingest;
 pub mod jobs;
 pub mod message;
 pub mod repository;
+pub mod stats;
 pub mod storage;
 pub mod types;
 pub mod user;
@@ -30,6 +31,7 @@ use crate::{
     jobs::{JobService, create_job_service, create_job_worker_subsystem},
     message::{MessageService, MessageServiceImpl},
     repository::RepositoryService,
+    stats::{StatsService, StatsServiceImpl},
     storage::{AttachmentStorageService, RawStorageService},
     user::{UserService, UserServiceImpl, UserSettingService, UserSettingServiceImpl},
 };
@@ -66,6 +68,7 @@ pub struct CoreServices {
     pub raw_storage_service: Arc<dyn RawStorageService>,
     pub attachment_storage_service: Arc<dyn AttachmentStorageService>,
     pub job_service: Arc<dyn JobService>,
+    pub stats_service: Arc<dyn StatsService>,
     pub repository_service: Arc<RepositoryService>,
     pub job_concurrency: usize,
     pub(crate) wake_notify: Arc<tokio::sync::Notify>,
@@ -87,6 +90,7 @@ impl CoreServices {
 
         let folder_service: Arc<dyn FolderService> = Arc::new(FolderServiceImpl::new(repository_service.clone()));
         let message_service: Arc<dyn MessageService> = Arc::new(MessageServiceImpl::new(repository_service.clone()));
+        let stats_service: Arc<dyn StatsService> = Arc::new(StatsServiceImpl::new(repository_service.clone()));
         let ingest_service = create_ingest_service(raw_storage_service.clone(), job_service.clone());
 
         let account_service: Arc<dyn AccountService> = Arc::new(AccountServiceImpl::new(
@@ -114,6 +118,7 @@ impl CoreServices {
             raw_storage_service,
             attachment_storage_service,
             job_service,
+            stats_service,
             repository_service,
             job_concurrency,
             wake_notify,
