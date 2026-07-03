@@ -9,6 +9,7 @@ use delete_account_modal::DeleteAccountModal;
 use dioxus::prelude::*;
 use edit_folders_modal::EditFoldersModal;
 use format::{status_icon_color, status_tooltip};
+use stats_panel::StatsPanel;
 #[cfg(feature = "server")]
 use {crate::routes::server_helpers::authenticated_user, crate::server::AuthSession};
 
@@ -84,8 +85,11 @@ pub(crate) fn HomePage() -> Element {
                     }
                 }
             }
-            // Right panel — blank
-            div { class: "flex-1 overflow-auto p-8" }
+            // Right panel — global archive statistics (empty-selection state).
+            // When an account is selected, MK-21 owns this panel (message list).
+            div { class: "flex-1 overflow-auto p-8",
+                StatsPanel {}
+            }
         }
     }
 }

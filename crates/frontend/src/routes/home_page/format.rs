@@ -60,6 +60,38 @@ pub(crate) fn special_use_rank(special_use: Option<&str>) -> u8 {
     }
 }
 
+/// Human-readable byte size. Whole bytes below 1 KB; otherwise one decimal
+/// place in the largest fitting unit (KB/MB/GB/TB, base 1000).
+pub(crate) fn format_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
+    if bytes < 1000 {
+        return format!("{bytes} B");
+    }
+    #[allow(clippy::cast_precision_loss)]
+    let mut value = bytes as f64;
+    let mut unit = 0;
+    while value >= 1000.0 && unit < UNITS.len() - 1 {
+        value /= 1000.0;
+        unit += 1;
+    }
+    format!("{value:.1} {}", UNITS[unit])
+}
+
+/// Group an integer with thousands separators (e.g. 12431 -> "12,431").
+pub(crate) fn thousands(n: u64) -> String {
+    let s = n.to_string();
+    let bytes = s.as_bytes();
+    let mut out = String::with_capacity(s.len() + s.len() / 3);
+    let first = bytes.len() % 3;
+    for (i, b) in bytes.iter().enumerate() {
+        if i != 0 && i >= first && (i - first).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(*b as char);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -83,6 +115,23 @@ mod tests {
         assert_eq!(status_tooltip("Error", None, None), "Error");
         assert_eq!(status_tooltip("PendingFirstSync", None, None), "Pending first sync");
         assert_eq!(status_tooltip("Disabled", Some("3d ago"), None), "Disabled · last synced 3d ago");
+    }
+
+    #[test]
+    fn format_bytes_units() {
+        assert_eq!(format_bytes(0), "0 B");
+        assert_eq!(format_bytes(512), "512 B");
+        assert_eq!(format_bytes(1000), "1.0 KB");
+        assert_eq!(format_bytes(1_500), "1.5 KB");
+        assert_eq!(format_bytes(4_509_715_660), "4.5 GB");
+    }
+
+    #[test]
+    fn thousands_groups() {
+        assert_eq!(thousands(0), "0");
+        assert_eq!(thousands(999), "999");
+        assert_eq!(thousands(12_431), "12,431");
+        assert_eq!(thousands(1_000_000), "1,000,000");
     }
 
     #[test]
