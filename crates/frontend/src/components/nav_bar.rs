@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 use crate::server::AuthSession;
 use crate::{
     Route,
-    components::{THEME_MODE, set_theme_preference},
+    components::{SELECTED_ACCOUNT, THEME_MODE, set_theme_preference},
 };
 
 #[get("/api/v1/user/is_admin", auth_session: axum::Extension<AuthSession>)]
@@ -173,7 +173,10 @@ pub(crate) fn NavBar() -> Element {
                 button {
                     class: "flex items-center hover:text-indigo-200 cursor-pointer",
                     title: "Home",
-                    onclick: move |_| { navigator.push(Route::HomePage {}); },
+                    onclick: move |_| {
+                        *SELECTED_ACCOUNT.write() = None;
+                        navigator.push(Route::HomePage {});
+                    },
                     svg {
                         class: "w-5 h-5",
                         fill: "none",
