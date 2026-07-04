@@ -10,8 +10,10 @@ use crate::{
     imap::{ImapConnectionParams, ImapCredentials, ImapPort, ImapServerConfig, RemoteFolder, SyncStatus},
     ingest::IngestService,
     message::MessageService,
+    search::{SearchResults, SearchService},
     storage::{AttachmentStorageService, RawStorageService},
     types::ContentHash,
+    user::UserId,
 };
 
 /// Nop `RawStorageService` — panics on any call. Suitable only for tests that
@@ -60,6 +62,23 @@ impl AttachmentStorageService for NopAttachmentStorage {
     }
 }
 
+/// Nop `SearchService` — `search` panics, but `delete_account` succeeds so the
+/// account-deletion cleanup path (exercised by the lifecycle integration tests)
+/// can run without a real index. Tests that assert search behavior wire a real
+/// adapter instead.
+struct NopSearchService;
+
+#[async_trait]
+impl SearchService for NopSearchService {
+    async fn search(&self, _user_id: UserId, _query: &str, _limit: u32, _offset: u32) -> Result<SearchResults, Error> {
+        unimplemented!("NopSearchService: not available in test context")
+    }
+
+    async fn delete_account(&self, _account_id: AccountId) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
 /// Nop `ImapPort` — every method returns `Error::Unimplemented`. For tests that
 /// construct `CoreServices` but never exercise IMAP.
 struct NopImapPort;
@@ -104,6 +123,7 @@ pub fn default_external_services_builder() -> ExternalServicesBuilder {
         .cipher_service(test_cipher_service())
         .raw_storage_service(Arc::new(NopRawStorage) as Arc<dyn RawStorageService>)
         .attachment_storage_service(Arc::new(NopAttachmentStorage) as Arc<dyn AttachmentStorageService>)
+        .search_service(Arc::new(NopSearchService) as Arc<dyn SearchService>)
         .job_concurrency(1)
         .imap_port_factory(Box::new(
             |_ingest: Arc<dyn IngestService>, _folders: Arc<dyn FolderService>, _messages: Arc<dyn MessageService>| Arc::new(NopImapPort) as Arc<dyn ImapPort>,

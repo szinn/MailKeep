@@ -32,6 +32,7 @@ use crate::{
     jobs::{JobService, create_job_service, create_job_worker_subsystem},
     message::{MessageService, MessageServiceImpl},
     repository::RepositoryService,
+    search::SearchService,
     stats::{StatsService, StatsServiceImpl},
     storage::{AttachmentStorageService, RawStorageService},
     user::{UserService, UserServiceImpl, UserSettingService, UserSettingServiceImpl},
@@ -51,6 +52,7 @@ pub struct ExternalServices {
     pub(crate) cipher_service: Arc<dyn CipherService>,
     pub(crate) raw_storage_service: Arc<dyn RawStorageService>,
     pub(crate) attachment_storage_service: Arc<dyn AttachmentStorageService>,
+    pub(crate) search_service: Arc<dyn SearchService>,
     pub(crate) job_concurrency: usize,
     pub(crate) imap_port_factory: ImapPortFactory,
 }
@@ -68,6 +70,7 @@ pub struct CoreServices {
     pub cipher_service: Arc<dyn CipherService>,
     pub raw_storage_service: Arc<dyn RawStorageService>,
     pub attachment_storage_service: Arc<dyn AttachmentStorageService>,
+    pub search_service: Arc<dyn SearchService>,
     pub job_service: Arc<dyn JobService>,
     pub stats_service: Arc<dyn StatsService>,
     pub repository_service: Arc<RepositoryService>,
@@ -82,6 +85,7 @@ impl CoreServices {
             cipher_service,
             raw_storage_service,
             attachment_storage_service,
+            search_service,
             job_concurrency,
             imap_port_factory,
         } = external;
@@ -99,6 +103,7 @@ impl CoreServices {
             cipher_service.clone(),
             raw_storage_service.clone(),
             attachment_storage_service.clone(),
+            search_service.clone(),
             event_service.clone(),
         ));
 
@@ -118,6 +123,7 @@ impl CoreServices {
             cipher_service,
             raw_storage_service,
             attachment_storage_service,
+            search_service,
             job_service,
             stats_service,
             repository_service,

@@ -4006,6 +4006,7 @@ dependencies = [
  "mk-frontend",
  "mk-imap",
  "mk-parser",
+ "mk-search",
  "mk-storage",
  "rpassword",
  "secrecy",

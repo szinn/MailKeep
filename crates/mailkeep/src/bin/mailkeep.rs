@@ -58,11 +58,16 @@ async fn cmd_server(config: mailkeep::config::Config) -> anyhow::Result<()> {
         .await
         .context("Couldn't initialize storage")?;
 
+    let search_index_dir = config.metadata_path.join("index");
+    let search_index = mk_search::open_search_index(&search_index_dir).context("Couldn't open search index")?;
+    let search_service = mk_search::create_search_service(search_index.clone(), repository_service.clone());
+
     let external = ExternalServicesBuilder::default()
         .repository_service(repository_service.clone())
         .cipher_service(cipher_service)
         .raw_storage_service(storage_service.raw_storage_service)
         .attachment_storage_service(storage_service.attachment_storage_service)
+        .search_service(search_service)
         .imap_port_factory(mk_imap::create_imap_port_factory(Duration::from_secs(config.imap_poll_interval_secs)))
         .job_concurrency(config.job_concurrency)
         .build()
@@ -70,6 +75,8 @@ async fn cmd_server(config: mailkeep::config::Config) -> anyhow::Result<()> {
     let core_services = create_services(external).context("Couldn't create core services")?;
 
     mk_parser::register_handlers(&core_services);
+
+    let search_subsystem = mk_search::create_search_subsystem(&core_services, search_index.clone());
 
     let oidc_config = if config.oidc.is_set() { Some(config.oidc.clone()) } else { None };
     let frontend_subsystem = create_frontend_subsystem(&config.frontend, oidc_config, core_services.clone());
@@ -82,6 +89,7 @@ async fn cmd_server(config: mailkeep::config::Config) -> anyhow::Result<()> {
     Toplevel::new(async |s: &mut SubsystemHandle| {
         s.start(SubsystemBuilder::new("Core", core_subsystem.into_subsystem()));
         s.start(SubsystemBuilder::new("Imap", imap_subsystem.into_subsystem()));
+        s.start(SubsystemBuilder::new("Search", search_subsystem.into_subsystem()));
         s.start(SubsystemBuilder::new("Frontend", frontend_subsystem.into_subsystem()));
     })
     .catch_signals()

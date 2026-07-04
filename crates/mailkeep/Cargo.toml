@@ -30,6 +30,7 @@ server = [
     "dep:mk-frontend",
     "dep:mk-imap",
     "dep:mk-parser",
+    "dep:mk-search",
     "dep:mk-storage",
     "dep:rpassword",
     "dep:secrecy",
@@ -50,6 +51,7 @@ mk-database = { workspace = true, optional = true }
 mk-frontend = { workspace = true, optional = true }
 mk-imap = { workspace = true, optional = true }
 mk-parser = { workspace = true, optional = true }
+mk-search = { workspace = true, optional = true }
 mk-storage = { workspace = true, optional = true }
 
 anyhow = { workspace = true, optional = true }

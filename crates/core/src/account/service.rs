@@ -9,6 +9,7 @@ use crate::{
     event::EventService,
     imap::ImapServerConfig,
     repository::RepositoryService,
+    search::SearchService,
     storage::{AttachmentStorageService, RawStorageService},
     types::EmailAddress,
     user::UserId,
@@ -59,6 +60,7 @@ pub(crate) struct AccountServiceImpl {
     cipher_service: Arc<dyn CipherService>,
     raw_storage_service: Arc<dyn RawStorageService>,
     attachment_storage_service: Arc<dyn AttachmentStorageService>,
+    search_service: Arc<dyn SearchService>,
     event_service: Arc<dyn EventService>,
 }
 
@@ -68,6 +70,7 @@ impl AccountServiceImpl {
         cipher_service: Arc<dyn CipherService>,
         raw_storage_service: Arc<dyn RawStorageService>,
         attachment_storage_service: Arc<dyn AttachmentStorageService>,
+        search_service: Arc<dyn SearchService>,
         event_service: Arc<dyn EventService>,
     ) -> Self {
         Self {
@@ -75,6 +78,7 @@ impl AccountServiceImpl {
             cipher_service,
             raw_storage_service,
             attachment_storage_service,
+            search_service,
             event_service,
         }
     }
@@ -264,6 +268,13 @@ impl AccountService for AccountServiceImpl {
                 "failed to delete attachment storage for account; row is gone, ciphertext is cryptographically inaccessible",
             );
         }
+        if let Err(e) = self.search_service.delete_account(account_to_delete.id).await {
+            tracing::warn!(
+                account_id = account_to_delete.id,
+                error = %e,
+                "failed to delete search index docs for account",
+            );
+        }
         self.event_service.notify_accounts_changed();
         tracing::info!(account = %account_to_delete.log_label(), "account deleted");
         Ok(())
@@ -289,6 +300,7 @@ mod tests {
         event::{MockEventService, create_event_service},
         imap::TlsMode,
         repository::testing::default_repository_service_builder,
+        search::MockSearchService,
         storage::{MockAttachmentStorageService, MockRawStorageService},
     };
 
@@ -315,17 +327,34 @@ mod tests {
     /// mocks. Tests that exercise delete_account override the storage mocks
     /// via the alt builder below.
     fn make_service(account_repo: MockAccountRepository) -> AccountServiceImpl {
-        make_service_with_storage(account_repo, MockRawStorageService::new(), MockAttachmentStorageService::new())
+        make_service_with_storage(
+            account_repo,
+            MockRawStorageService::new(),
+            MockAttachmentStorageService::new(),
+            MockSearchService::new(),
+        )
     }
 
-    fn make_service_with_storage(account_repo: MockAccountRepository, raw: MockRawStorageService, attach: MockAttachmentStorageService) -> AccountServiceImpl {
+    fn make_service_with_storage(
+        account_repo: MockAccountRepository,
+        raw: MockRawStorageService,
+        attach: MockAttachmentStorageService,
+        search: MockSearchService,
+    ) -> AccountServiceImpl {
         let repository_service = Arc::new(
             default_repository_service_builder()
                 .account_repository(Arc::new(account_repo))
                 .build()
                 .expect("all fields provided"),
         );
-        AccountServiceImpl::new(repository_service, cipher(), Arc::new(raw), Arc::new(attach), create_event_service())
+        AccountServiceImpl::new(
+            repository_service,
+            cipher(),
+            Arc::new(raw),
+            Arc::new(attach),
+            Arc::new(search),
+            create_event_service(),
+        )
     }
 
     fn make_service_with_event(account_repo: MockAccountRepository, event_service: Arc<dyn EventService>) -> AccountServiceImpl {
@@ -340,6 +369,7 @@ mod tests {
             cipher(),
             Arc::new(MockRawStorageService::new()),
             Arc::new(MockAttachmentStorageService::new()),
+            Arc::new(MockSearchService::new()),
             event_service,
         )
     }
@@ -573,7 +603,10 @@ mod tests {
         let mut attach = MockAttachmentStorageService::new();
         attach.expect_delete_account().with(eq(1u64)).times(1).returning(|_| Box::pin(async { Ok(()) }));
 
-        let svc = make_service_with_storage(repo, raw, attach);
+        let mut search = MockSearchService::new();
+        search.expect_delete_account().with(eq(1u64)).times(1).returning(|_| Ok(()));
+
+        let svc = make_service_with_storage(repo, raw, attach, search);
         svc.delete_account(42, 1).await.unwrap();
     }
 
@@ -672,6 +705,9 @@ mod tests {
         let mut attach = MockAttachmentStorageService::new();
         attach.expect_delete_account().with(eq(1u64)).times(1).returning(|_| Box::pin(async { Ok(()) }));
 
+        let mut search = MockSearchService::new();
+        search.expect_delete_account().with(eq(1u64)).times(1).returning(|_| Ok(()));
+
         let mut event_svc = MockEventService::new();
         event_svc.expect_notify_accounts_changed().times(1).return_const(());
 
@@ -681,7 +717,14 @@ mod tests {
                 .build()
                 .expect("all fields provided"),
         );
-        let svc = AccountServiceImpl::new(repository_service, cipher(), Arc::new(raw), Arc::new(attach), Arc::new(event_svc));
+        let svc = AccountServiceImpl::new(
+            repository_service,
+            cipher(),
+            Arc::new(raw),
+            Arc::new(attach),
+            Arc::new(search),
+            Arc::new(event_svc),
+        );
         svc.delete_account(42, 1).await.unwrap();
     }
 
