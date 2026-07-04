@@ -28,6 +28,8 @@ pub struct Model {
     pub size_bytes: i64,
     pub has_attachments: bool,
     pub attachment_count: i32,
+    /// FTS watermark: false until the search indexer has ingested this row.
+    pub indexed: bool,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 }

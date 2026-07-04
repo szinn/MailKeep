@@ -6,7 +6,12 @@ use mk_core::{
     repository::Transaction,
     types::{ContentHash, EmailAddress},
 };
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, sea_query::NullOrdering};
+use sea_orm::{
+    ActiveModelTrait,
+    ActiveValue::Set,
+    ColumnTrait, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect,
+    sea_query::{Expr, NullOrdering},
+};
 
 use crate::{
     entities::{messages, prelude},
@@ -109,6 +114,7 @@ impl MessageRepository for MessageRepositoryAdapter {
             size_bytes: Set(new.size_bytes),
             has_attachments: Set(new.has_attachments),
             attachment_count: Set(new.attachment_count),
+            indexed: Set(false),
             created_at: Set(now.into()),
             updated_at: Set(now.into()),
         };
@@ -150,6 +156,39 @@ impl MessageRepository for MessageRepositoryAdapter {
             .await
             .map_err(handle_dberr)?;
         Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn list_unindexed(&self, transaction: &dyn Transaction, limit: u32) -> Result<Vec<Message>, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+        let rows = prelude::Messages::find()
+            .filter(messages::Column::Indexed.eq(false))
+            // Ascending id order — a stable, deterministic drain order that
+            // guarantees the indexer makes progress with no starvation. Message
+            // ids are random token-derived values, so this is NOT temporal /
+            // oldest-first order; do not read recency into it.
+            .order_by_asc(messages::Column::Id)
+            .limit(u64::from(limit))
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn mark_indexed(&self, transaction: &dyn Transaction, ids: &[MessageId]) -> Result<(), Error> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+        let id_list: Vec<i64> = ids.iter().map(|id| *id as i64).collect();
+        // Bulk UPDATE bypasses the `before_save` version hook; that is fine here
+        // since `indexed` is an internal watermark, not a user-visible field.
+        prelude::Messages::update_many()
+            .col_expr(messages::Column::Indexed, Expr::value(true))
+            .filter(messages::Column::Id.is_in(id_list))
+            .exec(transaction)
+            .await
+            .map_err(handle_dberr)?;
+        Ok(())
     }
 }
 
@@ -331,6 +370,76 @@ mod tests {
         let page = svc.message_repository().list_for_account(&*tx, account_id, 2, 1).await.unwrap();
         let page_ids: Vec<_> = page.iter().map(|m| m.id).collect();
         assert_eq!(page_ids, vec![middle_b_id, middle_a_id]);
+    }
+
+    #[tokio::test]
+    async fn list_unindexed_orders_by_id_asc_and_respects_limit() {
+        let svc = setup().await;
+        let user_id = make_user(&svc, "alice", "alice@example.com").await;
+        let account_id = make_account(&svc, user_id, "example.com").await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        // Insert with explicit ids out of insertion order; list_unindexed must
+        // return them in ascending id order, independent of insertion sequence.
+        let mut c = new_row(account_id, "<c@example.com>");
+        c.token = MessageToken::new(300);
+        let c_id = svc.message_repository().create(&*tx, c).await.unwrap().id;
+
+        let mut a = new_row(account_id, "<a@example.com>");
+        a.token = MessageToken::new(100);
+        let a_id = svc.message_repository().create(&*tx, a).await.unwrap().id;
+
+        let mut b = new_row(account_id, "<b@example.com>");
+        b.token = MessageToken::new(200);
+        let b_id = svc.message_repository().create(&*tx, b).await.unwrap().id;
+
+        let all = svc.message_repository().list_unindexed(&*tx, 10).await.unwrap();
+        let ids: Vec<_> = all.iter().map(|m| m.id).collect();
+        assert_eq!(ids, vec![a_id, b_id, c_id]);
+
+        // limit caps the result to the oldest `limit` rows.
+        let capped = svc.message_repository().list_unindexed(&*tx, 2).await.unwrap();
+        let capped_ids: Vec<_> = capped.iter().map(|m| m.id).collect();
+        assert_eq!(capped_ids, vec![a_id, b_id]);
+    }
+
+    #[tokio::test]
+    async fn mark_indexed_flips_only_targeted_rows_and_noop_on_empty() {
+        let svc = setup().await;
+        let user_id = make_user(&svc, "alice", "alice@example.com").await;
+        let account_id = make_account(&svc, user_id, "example.com").await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let m1 = svc.message_repository().create(&*tx, new_row(account_id, "<m1@example.com>")).await.unwrap().id;
+        let m2 = svc.message_repository().create(&*tx, new_row(account_id, "<m2@example.com>")).await.unwrap().id;
+        let m3 = svc.message_repository().create(&*tx, new_row(account_id, "<m3@example.com>")).await.unwrap().id;
+
+        // Empty slice is a no-op: all three still unindexed.
+        svc.message_repository().mark_indexed(&*tx, &[]).await.unwrap();
+        let mut still: Vec<_> = svc
+            .message_repository()
+            .list_unindexed(&*tx, 10)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|m| m.id)
+            .collect();
+        still.sort_unstable();
+        let mut expected = vec![m1, m2, m3];
+        expected.sort_unstable();
+        assert_eq!(still, expected);
+
+        // Flag m1 and m3 only; m2 remains the sole unindexed row.
+        svc.message_repository().mark_indexed(&*tx, &[m1, m3]).await.unwrap();
+        let remaining: Vec<_> = svc
+            .message_repository()
+            .list_unindexed(&*tx, 10)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|m| m.id)
+            .collect();
+        assert_eq!(remaining, vec![m2]);
     }
 
     #[tokio::test]

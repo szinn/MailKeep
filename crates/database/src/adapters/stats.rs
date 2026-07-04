@@ -196,6 +196,7 @@ mod tests {
             size_bytes: Set(size_bytes),
             has_attachments: Set(attachment_count > 0),
             attachment_count: Set(attachment_count),
+            indexed: Set(false),
             created_at: Set(ts(1).into()),
             updated_at: Set(ts(1).into()),
         }

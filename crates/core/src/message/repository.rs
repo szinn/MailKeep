@@ -72,6 +72,15 @@ pub trait MessageRepository: Send + Sync {
     async fn find_by_id_for_account(&self, transaction: &dyn Transaction, account_id: AccountId, message_id: MessageId) -> Result<Option<Message>, Error>;
 
     async fn list_for_account(&self, transaction: &dyn Transaction, account_id: AccountId, limit: u32, offset: u32) -> Result<Vec<Message>, Error>;
+
+    /// Messages awaiting indexing (`indexed = false`), capped at `limit`, in
+    /// ascending id order. That order is a stable, deterministic drain order
+    /// with no starvation — NOT temporal: message ids are random token-derived
+    /// values, so ascending id does not mean oldest-first.
+    async fn list_unindexed(&self, transaction: &dyn Transaction, limit: u32) -> Result<Vec<Message>, Error>;
+
+    /// Flag the given messages as indexed. No-op for an empty slice.
+    async fn mark_indexed(&self, transaction: &dyn Transaction, ids: &[MessageId]) -> Result<(), Error>;
 }
 
 #[async_trait::async_trait]
@@ -88,6 +97,16 @@ pub trait MessageLocationRepository: Send + Sync {
 
     /// Returns the number of rows deleted.
     async fn delete_by_folder_id(&self, transaction: &dyn Transaction, folder_id: FolderId) -> Result<u64, Error>;
+
+    /// Subset of `message_ids` that have at least one location in `folder_ids`.
+    /// Empty inputs return an empty vec. Used for the `folder:` search
+    /// post-filter.
+    async fn filter_message_ids_in_folders(
+        &self,
+        transaction: &dyn Transaction,
+        message_ids: &[MessageId],
+        folder_ids: &[FolderId],
+    ) -> Result<Vec<MessageId>, Error>;
 }
 
 #[async_trait::async_trait]

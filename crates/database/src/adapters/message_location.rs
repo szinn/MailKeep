@@ -5,7 +5,7 @@ use mk_core::{
     message::{MessageId, MessageLocation, MessageLocationRepository, MessageLocationToken, NewMessageLocationRow},
     repository::Transaction,
 };
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
+use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
 use crate::{
     entities::{message_locations, prelude},
@@ -121,6 +121,31 @@ impl MessageLocationRepository for MessageLocationRepositoryAdapter {
             .await
             .map_err(handle_dberr)?;
         Ok(res.rows_affected)
+    }
+
+    async fn filter_message_ids_in_folders(
+        &self,
+        transaction: &dyn Transaction,
+        message_ids: &[MessageId],
+        folder_ids: &[FolderId],
+    ) -> Result<Vec<MessageId>, Error> {
+        if message_ids.is_empty() || folder_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+        let msg_id_list: Vec<i64> = message_ids.iter().map(|id| *id as i64).collect();
+        let folder_id_list: Vec<i64> = folder_ids.iter().map(|id| *id as i64).collect();
+        let rows: Vec<i64> = prelude::MessageLocations::find()
+            .select_only()
+            .column(message_locations::Column::MessageId)
+            .distinct()
+            .filter(message_locations::Column::MessageId.is_in(msg_id_list))
+            .filter(message_locations::Column::FolderId.is_in(folder_id_list))
+            .into_tuple()
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+        Ok(rows.into_iter().map(|id| id as u64).collect())
     }
 }
 
@@ -327,6 +352,65 @@ mod tests {
             .await
             .unwrap();
         assert!(gone_a.is_none());
+    }
+
+    #[tokio::test]
+    async fn filter_message_ids_in_folders_returns_distinct_subset() {
+        let svc = setup().await;
+        let user_id = make_user(&svc, "alice", "alice@example.com").await;
+        let account_id = make_account(&svc, user_id, "example.com").await;
+        let folder_a = make_folder(&svc, account_id, "INBOX").await;
+        let folder_b = make_folder(&svc, account_id, "Archive").await;
+        let m1 = make_message(&svc, account_id, "<m1@x.com>").await;
+        let m2 = make_message(&svc, account_id, "<m2@x.com>").await;
+        let m3 = make_message(&svc, account_id, "<m3@x.com>").await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        // m1 -> A, m2 -> B, m3 -> A and B.
+        svc.message_location_repository()
+            .upsert(&*tx, loc_row(m1, folder_a, 1, MessageFlags::default()))
+            .await
+            .unwrap();
+        svc.message_location_repository()
+            .upsert(&*tx, loc_row(m2, folder_b, 2, MessageFlags::default()))
+            .await
+            .unwrap();
+        svc.message_location_repository()
+            .upsert(&*tx, loc_row(m3, folder_a, 3, MessageFlags::default()))
+            .await
+            .unwrap();
+        svc.message_location_repository()
+            .upsert(&*tx, loc_row(m3, folder_b, 4, MessageFlags::default()))
+            .await
+            .unwrap();
+
+        let repo = svc.message_location_repository();
+
+        // Restricting to folder A yields the messages present in A.
+        let mut in_a = repo.filter_message_ids_in_folders(&*tx, &[m1, m2, m3], &[folder_a]).await.unwrap();
+        in_a.sort_unstable();
+        assert_eq!(in_a, {
+            let mut v = vec![m1, m3];
+            v.sort_unstable();
+            v
+        });
+
+        // Across both folders every message qualifies; m3 is de-duplicated.
+        let mut in_both = repo.filter_message_ids_in_folders(&*tx, &[m1, m2, m3], &[folder_a, folder_b]).await.unwrap();
+        in_both.sort_unstable();
+        assert_eq!(in_both, {
+            let mut v = vec![m1, m2, m3];
+            v.sort_unstable();
+            v
+        });
+
+        // A message not located in the queried folder is excluded.
+        let none = repo.filter_message_ids_in_folders(&*tx, &[m2], &[folder_a]).await.unwrap();
+        assert!(none.is_empty());
+
+        // Empty inputs short-circuit to an empty vec.
+        assert!(repo.filter_message_ids_in_folders(&*tx, &[], &[folder_a]).await.unwrap().is_empty());
+        assert!(repo.filter_message_ids_in_folders(&*tx, &[m1], &[]).await.unwrap().is_empty());
     }
 
     #[tokio::test]
