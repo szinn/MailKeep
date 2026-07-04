@@ -9,6 +9,7 @@ pub mod ingest;
 pub mod jobs;
 pub mod message;
 pub mod repository;
+pub mod search;
 pub mod stats;
 pub mod storage;
 pub mod types;
