@@ -59,7 +59,6 @@ pub(crate) fn MessageRow(row: MessageRowDto, on_open: EventHandler<String>) -> E
     let token = row.token.clone();
     rsx! {
         li {
-            key: "{row.token}",
             class: "flex cursor-pointer items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700/50",
             onclick: move |_| on_open.call(token.clone()),
             div { class: "min-w-0 flex-1",
