@@ -48,6 +48,19 @@ pub(crate) fn HomePage() -> Element {
         async move { list_accounts().await }
     });
 
+    // Reconcile selection against the account list: if the selected account is
+    // gone (deleted here, or removed by a server push via ACCOUNTS_REVISION),
+    // collapse the right panel back to statistics rather than leaving a stale,
+    // 404ing message list selected.
+    use_effect(move || {
+        if let Some(Ok(rows)) = accounts()
+            && let Some(token) = SELECTED_ACCOUNT()
+            && !rows.iter().any(|a| a.token == token)
+        {
+            *SELECTED_ACCOUNT.write() = None;
+        }
+    });
+
     rsx! {
         div { class: "flex h-full flex-1",
             // Left panel — account list
