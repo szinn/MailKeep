@@ -4309,11 +4309,15 @@ dependencies = [
 name = "mk-search"
 version = "0.1.5"
 dependencies = [
+ "async-trait",
  "chrono",
  "mk-core",
+ "mk-database",
+ "sea-orm",
  "tantivy",
  "tempfile",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
 ]
 

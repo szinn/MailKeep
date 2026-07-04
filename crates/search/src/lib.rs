@@ -10,13 +10,18 @@
 //!   ([`to_document`]).
 //! - [`index`]: [`SearchIndex`] open/create, reader/writer handles, and the
 //!   on-disk schema-version sidecar ([`needs_rebuild`], [`write_version`]).
+//! - [`service`]: [`TantivySearchService`], the
+//!   `mk_core::search::SearchService` adapter — query compilation, per-user
+//!   account scoping, the `folder:` DB post-filter, and `delete_account`.
 //!
-//! The search read service and indexer subsystem are added in later tasks.
+//! The indexer subsystem is added in a later task.
 //!
 //! [Tantivy]: https://github.com/quickwit-oss/tantivy
 
 pub mod index;
 pub mod schema;
+pub mod service;
 
 pub use index::{SearchIndex, SearchIndexError, needs_rebuild, read_version, write_version};
 pub use schema::{Fields, SCHEMA_VERSION, build_schema, to_document};
+pub use service::TantivySearchService;

@@ -1,7 +1,10 @@
 //! On-disk Tantivy index lifecycle: open/create, reader/writer handles, and the
 //! schema-version sidecar that drives rebuilds.
 
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+};
 
 use tantivy::{
     Index, IndexReader, IndexWriter, ReloadPolicy, TantivyError,
@@ -12,6 +15,12 @@ use crate::schema::{Fields, SCHEMA_VERSION, build_schema, en_stem_analyzer};
 
 /// Name of the plain-text sidecar file holding the on-disk [`SCHEMA_VERSION`].
 const VERSION_FILE: &str = "schema_version";
+
+/// Arena memory budget for the single shared [`IndexWriter`], in bytes.
+///
+/// Tantivy permits exactly one writer per index directory (a filesystem lock),
+/// so the budget is fixed at construction rather than per-call.
+const WRITER_MEM_BUDGET_BYTES: usize = 15_000_000;
 
 /// Startup / index-management errors for the search adapter.
 ///
@@ -40,14 +49,22 @@ pub enum SearchIndexError {
 
 /// A handle to the on-disk Tantivy index plus its resolved [`Fields`].
 ///
-/// Owns nothing mutable itself — writers and readers are created on demand. The
-/// `en_stem` tokenizer is registered on the underlying [`Index`] at open time,
-/// so any reader/writer/query built from it tokenizes the stemmed fields
+/// Owns the **single shared [`IndexWriter`]** for the index directory. Tantivy
+/// allows only one writer per directory (a lock), and multiple subsystems need
+/// to write — the indexer's drain loop and the search service's
+/// `delete_account`. Both obtain the same writer via [`SearchIndex::writer`]
+/// and serialize their commits through its [`Mutex`]. Readers, by contrast, are
+/// cheap and created on demand via [`SearchIndex::reader`].
+///
+/// The `en_stem` tokenizer is registered on the underlying [`Index`] at open
+/// time, so any reader/writer/query built from it tokenizes the stemmed fields
 /// correctly.
 pub struct SearchIndex {
     index: Index,
     fields: Fields,
     dir: PathBuf,
+    /// The one writer permitted for this directory, shared across subsystems.
+    writer: Arc<Mutex<IndexWriter>>,
 }
 
 impl std::fmt::Debug for SearchIndex {
@@ -82,10 +99,15 @@ impl SearchIndex {
 
         index.tokenizers().register(crate::schema::EN_STEM, en_stem_analyzer());
 
+        // Construct the one-and-only writer up front so the directory lock is
+        // held for the life of this handle and shared by every writer.
+        let writer = index.writer(WRITER_MEM_BUDGET_BYTES).map_err(|source| SearchIndexError::Writer { source })?;
+
         Ok(Self {
             index,
             fields,
             dir: dir.to_path_buf(),
+            writer: Arc::new(Mutex::new(writer)),
         })
     }
 
@@ -121,15 +143,16 @@ impl SearchIndex {
             .map_err(|source| SearchIndexError::Reader { source })
     }
 
-    /// Build the single index writer used by the indexer, sized to
-    /// `mem_budget_bytes` of arena memory.
+    /// A clone of the handle to the single shared [`IndexWriter`].
     ///
-    /// # Errors
-    ///
-    /// Returns [`SearchIndexError::Writer`] if the writer cannot be
-    /// constructed.
-    pub fn writer(&self, mem_budget_bytes: usize) -> Result<IndexWriter, SearchIndexError> {
-        self.index.writer(mem_budget_bytes).map_err(|source| SearchIndexError::Writer { source })
+    /// Lock the returned [`Mutex`] to add/delete documents and commit. The
+    /// writer is created once in [`SearchIndex::open_or_create`]; every caller
+    /// shares it, so concurrent writers cannot deadlock on the directory lock.
+    /// Keep critical sections short and never hold the guard across an
+    /// `.await`.
+    #[must_use]
+    pub fn writer(&self) -> Arc<Mutex<IndexWriter>> {
+        Arc::clone(&self.writer)
     }
 }
 
@@ -176,8 +199,6 @@ mod tests {
     use super::*;
     use crate::schema::{EN_STEM, to_document};
 
-    const WRITER_BUDGET: usize = 15_000_000;
-
     fn message(id: u64, subject: &str, snippet: &str) -> Message {
         MessageBuilder::default()
             .id(id)
@@ -199,9 +220,12 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let first = SearchIndex::open_or_create(dir.path());
         assert!(first.is_ok(), "fresh open failed: {first:?}");
-        // Reopening the now-existing index must also succeed.
+        // The eager shared writer holds the directory's writer lock, so only one
+        // live `SearchIndex` may exist per directory. Drop the first before
+        // reopening — the realistic single-handle lifecycle.
+        drop(first);
         let second = SearchIndex::open_or_create(dir.path());
-        assert!(second.is_ok(), "reopen failed: {second:?}");
+        assert!(second.is_ok(), "reopen after drop failed: {second:?}");
     }
 
     #[test]
@@ -245,10 +269,12 @@ mod tests {
         let si = SearchIndex::open_or_create(dir.path()).unwrap();
         let fields = *si.fields();
 
-        let mut writer = si.writer(WRITER_BUDGET).unwrap();
+        let writer_handle = si.writer();
+        let mut writer = writer_handle.lock().unwrap();
         let msg = message(42, "Quarterly running report", "preview text");
         writer.add_document(to_document(&fields, &msg, "the body content")).unwrap();
         writer.commit().unwrap();
+        drop(writer);
 
         let reader = si.reader().unwrap();
         let searcher = reader.searcher();
@@ -271,11 +297,13 @@ mod tests {
         // Session 1: index and commit a document, then drop everything.
         let si = SearchIndex::open_or_create(dir.path()).unwrap();
         let fields = *si.fields();
-        let mut writer = si.writer(WRITER_BUDGET).unwrap();
+        let writer_handle = si.writer();
+        let mut writer = writer_handle.lock().unwrap();
         let msg = message(77, "Persisted quarterly report", "durable preview");
         writer.add_document(to_document(&fields, &msg, "on-disk body")).unwrap();
         writer.commit().unwrap();
         drop(writer);
+        drop(writer_handle);
         drop(si);
 
         // Session 2: a fresh open of the same directory must see the committed doc.
@@ -301,10 +329,12 @@ mod tests {
         let si = SearchIndex::open_or_create(dir.path()).unwrap();
         let fields = *si.fields();
 
-        let mut writer = si.writer(WRITER_BUDGET).unwrap();
+        let writer_handle = si.writer();
+        let mut writer = writer_handle.lock().unwrap();
         let msg = message(1, "irrelevant", "snip");
         writer.add_document(to_document(&fields, &msg, "running quickly through the park")).unwrap();
         writer.commit().unwrap();
+        drop(writer);
 
         let reader = si.reader().unwrap();
         let searcher = reader.searcher();
