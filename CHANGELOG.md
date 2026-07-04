@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5](https://github.com/szinn/MailKeep/compare/v0.1.4..v0.1.5) - 2026-07-04
+
+### Features
+
+- _(frontend)_ Clear account selection from the Home button - ([0c2ce5c](https://github.com/szinn/MailKeep/commit/0c2ce5c1c73bb1dc5a270193a0227288da06e1c5))
+- _(frontend)_ Select account to show its message list - ([c14e89a](https://github.com/szinn/MailKeep/commit/c14e89a3272834ff008186705cd43ea35d84e60a))
+- _(frontend)_ Add MessageList load-more component - ([d3b06e9](https://github.com/szinn/MailKeep/commit/d3b06e97284d654b1120c76dc1d37a15378e4cc3))
+- _(frontend)_ Add list_messages server fn with ownership gate - ([033a25f](https://github.com/szinn/MailKeep/commit/033a25f110ff65891b1097585d7595ced26864ee))
+- _(frontend)_ Add shared MessageRowDto and MessageRow component - ([a0e6d65](https://github.com/szinn/MailKeep/commit/a0e6d65e502dc5030db3960a28960a61153028a4))
+
+### Bug Fixes
+
+- _(database)_ Order account message list by sent_date DESC nulls last - ([2998170](https://github.com/szinn/MailKeep/commit/2998170b670ebe12d78623b9fd3d6420db744e70))
+- _(frontend)_ Clear stale selection when the selected account disappears - ([901a330](https://github.com/szinn/MailKeep/commit/901a3307360c535dcb4f032c443bcb7e66054557))
+
 ## [0.1.4](https://github.com/szinn/MailKeep/compare/v0.1.3..v0.1.4) - 2026-07-03
 
 ### Features
