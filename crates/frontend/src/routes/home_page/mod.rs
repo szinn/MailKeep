@@ -10,13 +10,14 @@ use delete_account_modal::DeleteAccountModal;
 use dioxus::prelude::*;
 use edit_folders_modal::EditFoldersModal;
 use format::{status_icon_color, status_tooltip};
+use message_list::MessageList;
 use stats_panel::StatsPanel;
 #[cfg(feature = "server")]
 use {crate::routes::server_helpers::authenticated_user, crate::server::AuthSession};
 
 use crate::{
     Route,
-    components::ACCOUNTS_REVISION,
+    components::{ACCOUNTS_REVISION, SELECTED_ACCOUNT},
     routes::account_add_page::{dtos::AccountSummaryDto, list_accounts},
 };
 
@@ -86,10 +87,17 @@ pub(crate) fn HomePage() -> Element {
                     }
                 }
             }
-            // Right panel — global archive statistics (empty-selection state).
-            // When an account is selected, MK-21 owns this panel (message list).
-            div { class: "flex-1 overflow-auto p-8",
-                StatsPanel {}
+            // Right panel — statistics when nothing is selected, otherwise the
+            // selected account's message list (keyed so a new selection remounts).
+            div { class: "flex-1 overflow-auto",
+                match SELECTED_ACCOUNT() {
+                    Some(token) => rsx! {
+                        MessageList { key: "{token}", account_token: token }
+                    },
+                    None => rsx! {
+                        div { class: "p-8", StatsPanel {} }
+                    },
+                }
             }
         }
     }
@@ -106,9 +114,25 @@ fn AccountRow(account: AccountSummaryDto, refresh: Signal<u32>) -> Element {
     let mut show_edit = use_signal(|| false);
     let enabled = account.status != "Disabled";
     let token = account.token.clone();
+    let selected = SELECTED_ACCOUNT().as_deref() == Some(account.token.as_str());
+    let row_token = account.token.clone();
 
     rsx! {
-        li { key: "{account.token}", class: "flex items-center gap-3 px-4 py-3",
+        li {
+            key: "{account.token}",
+            class: if selected {
+                "flex cursor-pointer items-center gap-3 bg-indigo-50 px-4 py-3 dark:bg-slate-700/50"
+            } else {
+                "flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700/30"
+            },
+            onclick: move |_| {
+                let mut sel = SELECTED_ACCOUNT.write();
+                if sel.as_deref() == Some(row_token.as_str()) {
+                    *sel = None;
+                } else {
+                    *sel = Some(row_token.clone());
+                }
+            },
             StatusIcon { status: account.status.clone(), tooltip }
             div { class: "flex-1 min-w-0",
                 div { class: "text-sm font-medium text-gray-900 dark:text-slate-100 truncate", "{account.display_name}" }
@@ -122,12 +146,14 @@ fn AccountRow(account: AccountSummaryDto, refresh: Signal<u32>) -> Element {
                     class: "rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700",
                     title: "Actions",
                     disabled: busy(),
-                    onclick: move |_| menu_open.toggle(),
+                    onclick: move |e: MouseEvent| { e.stop_propagation(); menu_open.toggle(); },
                     "⋯"
                 }
                 if menu_open() {
-                    div { class: "fixed inset-0 z-40", onclick: move |_| menu_open.set(false) }
-                    div { class: "absolute right-0 top-full mt-1 w-40 bg-white dark:bg-slate-800 rounded-lg shadow-lg py-1 z-50 border dark:border-slate-700 text-sm",
+                    div { class: "fixed inset-0 z-40", onclick: move |e: MouseEvent| { e.stop_propagation(); menu_open.set(false); } }
+                    div {
+                        class: "absolute right-0 top-full mt-1 w-40 bg-white dark:bg-slate-800 rounded-lg shadow-lg py-1 z-50 border dark:border-slate-700 text-sm",
+                        onclick: move |e: MouseEvent| e.stop_propagation(),
                         button {
                             class: "w-full text-left px-4 py-2 text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700",
                             onclick: {
