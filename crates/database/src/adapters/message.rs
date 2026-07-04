@@ -6,7 +6,7 @@ use mk_core::{
     repository::Transaction,
     types::{ContentHash, EmailAddress},
 };
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
+use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, sea_query::NullOrdering};
 
 use crate::{
     entities::{messages, prelude},
@@ -139,7 +139,11 @@ impl MessageRepository for MessageRepositoryAdapter {
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
         let rows = prelude::Messages::find()
             .filter(messages::Column::AccountId.eq(account_id as i64))
-            .order_by_asc(messages::Column::Id)
+            // Newest sent first. sent_date is nullable; place NULLs last
+            // explicitly so behavior matches across Postgres (defaults NULLs
+            // first on DESC), MySQL, and SQLite. Id DESC is a stable tie-break.
+            .order_by_with_nulls(messages::Column::SentDate, Order::Desc, NullOrdering::Last)
+            .order_by_desc(messages::Column::Id)
             .limit(u64::from(limit))
             .offset(u64::from(offset))
             .all(transaction)
@@ -272,25 +276,61 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn list_for_account_returns_paginated() {
+    async fn list_for_account_orders_by_sent_date_desc_nulls_last() {
+        use chrono::{Duration, TimeZone, Utc};
+
         let svc = setup().await;
         let user_id = make_user(&svc, "alice", "alice@example.com").await;
         let account_id = make_account(&svc, user_id, "example.com").await;
         let tx = svc.repository().begin().await.unwrap();
 
-        let mut inserted_ids = Vec::new();
-        for i in 0..3 {
-            let row = new_row(account_id, &format!("<msg-{i}@example.com>"));
-            let m = svc.message_repository().create(&*tx, row).await.unwrap();
-            inserted_ids.push(m.id);
-        }
-        // Ensure stable id ordering for the test
-        inserted_ids.sort_unstable();
+        let base = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
 
+        // Message ids come from the row's MessageToken (not DB auto-increment),
+        // so assign them explicitly to make the ordering deterministic. Ids are
+        // chosen so that id order does NOT match sent_date order — id ASC would
+        // yield [newest, middle_a, middle_b, undated, oldest], which differs from
+        // the expected result below, so this test fails against `ORDER BY id ASC`.
+        // middle_a and middle_b share a date; middle_b has the higher id, so the
+        // Id DESC tie-break must place it first.
+        let mut newest = new_row(account_id, "<newest@example.com>");
+        newest.token = MessageToken::new(100);
+        newest.sent_date = Some(base + Duration::days(3));
+        let newest_id = svc.message_repository().create(&*tx, newest).await.unwrap().id;
+
+        let mut middle_a = new_row(account_id, "<middle-a@example.com>");
+        middle_a.token = MessageToken::new(200);
+        middle_a.sent_date = Some(base + Duration::days(2));
+        let middle_a_id = svc.message_repository().create(&*tx, middle_a).await.unwrap().id;
+
+        let mut middle_b = new_row(account_id, "<middle-b@example.com>");
+        middle_b.token = MessageToken::new(300);
+        middle_b.sent_date = Some(base + Duration::days(2));
+        let middle_b_id = svc.message_repository().create(&*tx, middle_b).await.unwrap().id;
+
+        let mut undated = new_row(account_id, "<undated@example.com>");
+        undated.token = MessageToken::new(400);
+        undated.sent_date = None;
+        let undated_id = svc.message_repository().create(&*tx, undated).await.unwrap().id;
+
+        let mut oldest = new_row(account_id, "<oldest@example.com>");
+        oldest.token = MessageToken::new(500);
+        oldest.sent_date = Some(base + Duration::days(1));
+        let oldest_id = svc.message_repository().create(&*tx, oldest).await.unwrap().id;
+
+        // The tie-break check relies on middle_b having the higher id.
+        assert!(middle_b_id > middle_a_id);
+
+        // sent_date DESC, NULLS LAST, Id DESC tie-break for the equal (day+2) pair.
+        let all = svc.message_repository().list_for_account(&*tx, account_id, 10, 0).await.unwrap();
+        let ids: Vec<_> = all.iter().map(|m| m.id).collect();
+        assert_eq!(ids, vec![newest_id, middle_b_id, middle_a_id, oldest_id, undated_id]);
+
+        // Pagination applies over the same ordering (offset=1, limit=2), including
+        // the tie-break within the equal-date pair.
         let page = svc.message_repository().list_for_account(&*tx, account_id, 2, 1).await.unwrap();
-        assert_eq!(page.len(), 2);
-        assert_eq!(page[0].id, inserted_ids[1]);
-        assert_eq!(page[1].id, inserted_ids[2]);
+        let page_ids: Vec<_> = page.iter().map(|m| m.id).collect();
+        assert_eq!(page_ids, vec![middle_b_id, middle_a_id]);
     }
 
     #[tokio::test]
