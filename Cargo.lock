@@ -4311,6 +4311,7 @@ version = "0.1.5"
 dependencies = [
  "async-trait",
  "chrono",
+ "mail-parser",
  "mk-core",
  "mk-database",
  "sea-orm",
@@ -4318,6 +4319,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-graceful-shutdown",
  "tracing",
 ]
 

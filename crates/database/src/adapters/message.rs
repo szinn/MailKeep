@@ -190,6 +190,20 @@ impl MessageRepository for MessageRepositoryAdapter {
             .map_err(handle_dberr)?;
         Ok(())
     }
+
+    async fn reset_all_indexed(&self, transaction: &dyn Transaction) -> Result<u64, Error> {
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+        // Unfiltered bulk UPDATE flips every row's watermark back to false so
+        // the drain re-indexes the entire corpus. Portable across all backends
+        // (no raw SQL); bypasses the `before_save` version hook, which is fine
+        // for this internal-only flag.
+        let result = prelude::Messages::update_many()
+            .col_expr(messages::Column::Indexed, Expr::value(false))
+            .exec(transaction)
+            .await
+            .map_err(handle_dberr)?;
+        Ok(result.rows_affected)
+    }
 }
 
 #[cfg(test)]
@@ -440,6 +454,47 @@ mod tests {
             .map(|m| m.id)
             .collect();
         assert_eq!(remaining, vec![m2]);
+    }
+
+    #[tokio::test]
+    async fn reset_all_indexed_flips_every_row_back_to_unindexed() {
+        let svc = setup().await;
+        let user_id = make_user(&svc, "alice", "alice@example.com").await;
+        let account_id = make_account(&svc, user_id, "example.com").await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let m1 = svc.message_repository().create(&*tx, new_row(account_id, "<m1@example.com>")).await.unwrap().id;
+        let m2 = svc.message_repository().create(&*tx, new_row(account_id, "<m2@example.com>")).await.unwrap().id;
+        let m3 = svc.message_repository().create(&*tx, new_row(account_id, "<m3@example.com>")).await.unwrap().id;
+
+        // Mark two of the three indexed so the reset has a mix to flip back.
+        svc.message_repository().mark_indexed(&*tx, &[m1, m2]).await.unwrap();
+        let unindexed_before: Vec<_> = svc
+            .message_repository()
+            .list_unindexed(&*tx, 10)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|m| m.id)
+            .collect();
+        assert_eq!(unindexed_before, vec![m3], "only m3 remains unindexed before reset");
+
+        // Reset flips all three rows back to unindexed and reports rows affected.
+        let affected = svc.message_repository().reset_all_indexed(&*tx).await.unwrap();
+        assert_eq!(affected, 3, "every row is reported affected");
+
+        let mut after: Vec<_> = svc
+            .message_repository()
+            .list_unindexed(&*tx, 10)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|m| m.id)
+            .collect();
+        after.sort_unstable();
+        let mut expected = vec![m1, m2, m3];
+        expected.sort_unstable();
+        assert_eq!(after, expected, "all rows are unindexed again after reset");
     }
 
     #[tokio::test]

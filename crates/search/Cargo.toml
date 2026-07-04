@@ -14,8 +14,11 @@ mk-core.workspace = true
 
 async-trait.workspace = true
 chrono.workspace = true
+mail-parser.workspace = true
 tantivy.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
+tokio-graceful-shutdown.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
@@ -23,7 +26,6 @@ mk-database.workspace = true
 
 sea-orm.workspace = true
 tempfile.workspace = true
-tokio.workspace = true
 
 [lints]
 workspace = true

@@ -81,6 +81,11 @@ pub trait MessageRepository: Send + Sync {
 
     /// Flag the given messages as indexed. No-op for an empty slice.
     async fn mark_indexed(&self, transaction: &dyn Transaction, ids: &[MessageId]) -> Result<(), Error>;
+
+    /// Reset every message's `indexed` flag to `false`, forcing a full
+    /// re-index. Returns the number of rows affected. Used by the search
+    /// subsystem's startup rebuild when the on-disk schema version changed.
+    async fn reset_all_indexed(&self, transaction: &dyn Transaction) -> Result<u64, Error>;
 }
 
 #[async_trait::async_trait]

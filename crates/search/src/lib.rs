@@ -13,15 +13,50 @@
 //! - [`service`]: [`TantivySearchService`], the
 //!   `mk_core::search::SearchService` adapter — query compilation, per-user
 //!   account scoping, the `folder:` DB post-filter, and `delete_account`.
+//! - [`indexer`]: [`SearchSubsystem`], the background write side — startup
+//!   schema-version rebuild, an idempotent drain of `indexed = false` rows, and
+//!   decrypt-on-demand body extraction.
 //!
-//! The indexer subsystem is added in a later task.
+//! The public wiring surface is the three factories below:
+//! [`open_search_index`] (shared handle), [`create_search_service`] (read
+//! side), and [`create_search_subsystem`] (write side). `mailkeep`'s `main.rs`
+//! calls them.
 //!
 //! [Tantivy]: https://github.com/quickwit-oss/tantivy
 
 pub mod index;
+pub mod indexer;
 pub mod schema;
 pub mod service;
 
+use std::{path::Path, sync::Arc};
+
 pub use index::{SearchIndex, SearchIndexError, needs_rebuild, read_version, write_version};
+pub use indexer::SearchSubsystem;
+use mk_core::{CoreServices, repository::RepositoryService, search::SearchService};
 pub use schema::{Fields, SCHEMA_VERSION, build_schema, to_document};
 pub use service::TantivySearchService;
+
+/// Open (or create) the on-disk Tantivy index at `dir`, returning a shared
+/// handle. Both the read service and the indexer subsystem take a clone of the
+/// same [`Arc`], so they share the single writer the index owns.
+///
+/// # Errors
+///
+/// Returns [`SearchIndexError`] if the directory or index cannot be opened.
+pub fn open_search_index(dir: &Path) -> Result<Arc<SearchIndex>, SearchIndexError> {
+    Ok(Arc::new(SearchIndex::open_or_create(dir)?))
+}
+
+/// Build the read-side [`SearchService`] adapter over the shared index.
+#[must_use]
+pub fn create_search_service(index: Arc<SearchIndex>, repository_service: Arc<RepositoryService>) -> Arc<dyn SearchService> {
+    Arc::new(TantivySearchService::new(index, repository_service))
+}
+
+/// Build the write-side [`SearchSubsystem`], capturing the repository and raw
+/// storage services from `core` plus the shared index.
+#[must_use]
+pub fn create_search_subsystem(core: &Arc<CoreServices>, index: Arc<SearchIndex>) -> SearchSubsystem {
+    SearchSubsystem::new(index, core.repository_service.clone(), core.raw_storage_service.clone())
+}
