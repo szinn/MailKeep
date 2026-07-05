@@ -13,6 +13,9 @@ mod folder_message;
 #[cfg(feature = "sqlite")]
 mod ingest;
 
+#[cfg(feature = "sqlite")]
+mod search;
+
 #[cfg(feature = "greenmail")]
 mod greenmail;
 

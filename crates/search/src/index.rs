@@ -31,6 +31,9 @@ pub enum SearchIndexError {
     #[error("creating search index directory {dir}: {source}")]
     CreateDir { dir: PathBuf, source: std::io::Error },
 
+    #[error("clearing stale search index directory {dir}: {source}")]
+    ResetDir { dir: PathBuf, source: std::io::Error },
+
     #[error("opening search index directory {dir}: {source}")]
     OpenDir { dir: PathBuf, source: OpenDirectoryError },
 
@@ -88,6 +91,28 @@ impl SearchIndex {
         })?;
 
         let (schema, fields) = build_schema();
+
+        // `Index::open_or_create` REFUSES to open an existing index whose on-disk
+        // schema differs from the one we pass (a hard `SchemaError`). So if a
+        // previous `SCHEMA_VERSION` persisted an incompatible field set, we must
+        // discard it *here*, before opening — otherwise the process can't even
+        // start. Clearing the directory lets a fresh index be created with the
+        // current schema; the indexer's startup reconcile then re-queues and
+        // re-indexes every row. The index is rebuildable derived data, so wiping
+        // it is always safe. (A same-schema but stale-*version* bump is handled
+        // separately by the reconcile's `delete_all` path — the on-disk schema
+        // still matches there, so this open succeeds.)
+        let schema_incompatible = matches!(
+            MmapDirectory::open(dir).ok().and_then(|d| Index::open(d).ok()),
+            Some(existing) if existing.schema() != schema
+        );
+        if schema_incompatible {
+            clear_dir_contents(dir).map_err(|source| SearchIndexError::ResetDir {
+                dir: dir.to_path_buf(),
+                source,
+            })?;
+        }
+
         let mmap = MmapDirectory::open(dir).map_err(|source| SearchIndexError::OpenDir {
             dir: dir.to_path_buf(),
             source,
@@ -154,6 +179,27 @@ impl SearchIndex {
     pub fn writer(&self) -> Arc<Mutex<IndexWriter>> {
         Arc::clone(&self.writer)
     }
+}
+
+/// Remove every entry inside `dir` (files and subdirectories) while leaving the
+/// directory itself in place. Used to discard a stale/incompatible on-disk
+/// index before creating a fresh one. A missing directory is treated as already
+/// clear.
+fn clear_dir_contents(dir: &Path) -> std::io::Result<()> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e),
+    };
+    for entry in entries {
+        let path = entry?.path();
+        if path.is_dir() {
+            std::fs::remove_dir_all(&path)?;
+        } else {
+            std::fs::remove_file(&path)?;
+        }
+    }
+    Ok(())
 }
 
 /// Path to the schema-version sidecar within `dir`.
@@ -321,6 +367,42 @@ mod tests {
         let doc: TantivyDocument = searcher.doc(addr).unwrap();
         assert_eq!(doc.get_first(fields.message_id).and_then(|v| v.as_u64()), Some(77));
         assert_eq!(doc.get_first(fields.snippet).and_then(|v| v.as_str()), Some("durable preview"));
+    }
+
+    #[test]
+    fn open_or_create_replaces_index_with_incompatible_schema() {
+        use tantivy::{
+            Index,
+            schema::{STORED, Schema, TEXT},
+        };
+
+        let dir = TempDir::new().unwrap();
+
+        // Simulate an index written by a previous SCHEMA_VERSION with a DIFFERENT
+        // field set. `Index::open_or_create` with the current schema would reject
+        // this on-disk schema with a hard error. Drop the writer + index to
+        // release the directory lock before reopening.
+        let mut sb = Schema::builder();
+        let legacy = sb.add_text_field("legacy_only", TEXT | STORED);
+        let stale = Index::create_in_dir(dir.path(), sb.build()).unwrap();
+        let mut writer: tantivy::IndexWriter = stale.writer(15_000_000).unwrap();
+        let mut doc = TantivyDocument::default();
+        doc.add_text(legacy, "stale content");
+        writer.add_document(doc).unwrap();
+        writer.commit().unwrap();
+        drop(writer);
+        drop(stale);
+
+        // Opening with the current schema must NOT error — it discards the
+        // incompatible index and builds fresh (the index is rebuildable data).
+        let si = SearchIndex::open_or_create(dir.path()).expect("incompatible on-disk schema is wiped, not a hard error");
+
+        // The rebuilt index carries the current schema and is empty, ready for
+        // the indexer to repopulate.
+        let fields = *si.fields();
+        let searcher = si.reader().unwrap().searcher();
+        assert_eq!(searcher.num_docs(), 0, "stale docs are discarded on rebuild");
+        let _ = QueryParser::for_index(si.index(), vec![fields.subject]);
     }
 
     #[test]

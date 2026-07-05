@@ -3621,6 +3621,7 @@ dependencies = [
  "mk-database",
  "mk-imap",
  "mk-parser",
+ "mk-search",
  "mk-storage",
  "rustls",
  "sea-orm",

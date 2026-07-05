@@ -223,6 +223,16 @@ impl SearchSubsystem {
         writer.commit().map_err(|e| tantivy_error(&e))?;
         Ok(())
     }
+
+    /// Run the startup reconcile, then drain to convergence exactly once,
+    /// propagating any error. Unlike the background [`run`](Self::run) loop
+    /// this does not poll — it returns as soon as the backlog is empty.
+    /// Intended for tests and a future one-shot reindex command.
+    pub async fn reindex_to_idle(&self) -> Result<(), Error> {
+        self.reconcile_on_startup().await?;
+        while self.drain_once().await? > 0 {}
+        Ok(())
+    }
 }
 
 impl IntoSubsystem<Error> for SearchSubsystem {

@@ -28,6 +28,7 @@ mk-core = { workspace = true, features = ["test-support"] }
 mk-database.workspace = true
 mk-imap = { workspace = true, optional = true, features = ["test-support"] }
 mk-parser.workspace = true
+mk-search.workspace = true
 mk-storage.workspace = true
 
 async-imap = { workspace = true, optional = true }
