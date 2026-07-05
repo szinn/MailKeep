@@ -288,6 +288,64 @@ async fn initial_sync_ingests_seeded_messages() {
     let _ = core.await;
 }
 
+/// A folder re-scanned and found current must refresh `last_synced_at`, not
+/// only when new mail is ingested. Regression guard: the sync path used to
+/// record the sync time exclusively inside the "messages fetched" branch, so a
+/// quiet folder kept the timestamp from its last *ingest* — which surfaced on
+/// the stats page as "updated N ago" reflecting the newest message instead of
+/// the last scan.
+#[tokio::test]
+#[ignore = "needs a docker/colima daemon — run via `just imap-integration-tests`"]
+async fn no_new_mail_scan_advances_last_synced_at() {
+    let gm = Greenmail::start().await;
+    let mut control = Control::connect(&gm).await.unwrap();
+    control.append("INBOX", "the only message").await.unwrap();
+    let server_uidvalidity = control.select_uidvalidity("INBOX").await.unwrap();
+    let _ = control.logout().await;
+
+    let ctx = setup_pipeline().await;
+    let user = make_user(&ctx).await;
+    let account_id = make_account(&ctx, user.id, gm.server()).await;
+    let inbox = make_inbox(&ctx, account_id, false).await;
+
+    // Pretend the folder was already fully synced an hour ago: cursor at the one
+    // existing message (UID 1) with the server's UIDVALIDITY. Starting from this
+    // cursor, the next scan finds nothing new (`from` = 2 > `upper` = 1) and takes
+    // the no-new-mail early-return path — exactly the path the fix must stamp.
+    let stale_at = Utc::now() - chrono::Duration::hours(1);
+    ctx.services
+        .folder_service
+        .record_sync_progress(inbox.id, server_uidvalidity, 1, stale_at)
+        .await
+        .unwrap();
+    let synced = folder_row(&ctx.repos, account_id, inbox.id).await;
+    let stale = synced.last_synced_at.expect("precondition: folder marked synced");
+
+    let core = run_core(&ctx);
+    let adapter = make_adapter(&ctx, Duration::from_secs(1));
+    // Start from the persisted cursor so the first pass finds no new mail.
+    adapter.start_account(account_id, params_for(gm.server(), &[&synced])).await.unwrap();
+
+    // Nothing new is fetched, yet a successful scan must refresh last_synced_at to
+    // (approximately) now — well past the hour-ago stale value.
+    let deadline = tokio::time::Instant::now() + ACCOUNT_TIMEOUT;
+    loop {
+        let current = folder_row(&ctx.repos, account_id, inbox.id).await.last_synced_at;
+        if current.is_some_and(|t| t > stale) {
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "a no-new-mail scan did not refresh last_synced_at (still {stale:?})"
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    adapter.stop_account(account_id).await.unwrap();
+    core.abort();
+    let _ = core.await;
+}
+
 /// Archiving must be non-destructive to the origin mailbox: fetching a message
 /// body must NOT mark it read on the server. The sync engine fetches with
 /// `BODY.PEEK[]` (not `BODY[]`), so an unread message stays unread after sync.

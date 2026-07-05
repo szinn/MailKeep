@@ -353,8 +353,13 @@ pub(crate) async fn sync_folder(
     if let Some(upper) = upper
         && upper < from
     {
-        // Nothing new to fetch.
+        // Nothing new to fetch — but the scan still succeeded (the SELECT
+        // confirmed the folder is current), so record the sync time. Otherwise
+        // `last_synced_at` would only ever reflect the last *ingest*, making a
+        // quiet-but-current folder look like it last synced when mail last
+        // arrived.
         tracing::debug!(account = account_label, folder = %folder.path, last_uid = high, "folder sync: no new messages");
+        folders.record_sync_progress(folder.id, server_uidvalidity, high, Utc::now()).await?;
         return Ok((high, server_uidvalidity));
     }
 
@@ -428,6 +433,10 @@ pub(crate) async fn sync_folder(
         );
     } else {
         tracing::debug!(account = account_label, folder = %folder.path, last_uid = high, "folder sync: no new messages");
+        // The loop fetched nothing (an open-ended scan that stopped on the first
+        // empty window), so no per-batch write ran above. Stamp the sync time so
+        // a successful no-op scan still updates `last_synced_at`.
+        folders.record_sync_progress(folder.id, server_uidvalidity, high, Utc::now()).await?;
     }
     Ok((high, server_uidvalidity))
 }
