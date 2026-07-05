@@ -3,6 +3,7 @@ mod delete_account_modal;
 mod edit_folders_modal;
 mod format;
 mod message_list;
+mod search_results;
 mod stats_panel;
 
 use account_actions::set_account_enabled;

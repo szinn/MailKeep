@@ -11,8 +11,7 @@ pub(crate) static ACTIVE_SEARCH: GlobalSignal<Option<String>> = Signal::global(|
 
 /// MK-20's hinted field grammar. The UI completes these names; it never parses
 /// or executes the grammar — the raw query string goes straight to the backend.
-const FIELD_NAMES: [&str; 10] =
-    ["account", "folder", "subject", "from", "to", "before", "after", "date", "attachments", "has"];
+const FIELD_NAMES: [&str; 10] = ["account", "folder", "subject", "from", "to", "before", "after", "date", "attachments", "has"];
 
 /// Rotating placeholder tips shown while the box is focused and empty.
 pub(crate) const PLACEHOLDER_TIPS: [&str; 6] = [
@@ -45,7 +44,8 @@ fn fixed_values(field: &str) -> Option<&'static [&'static str]> {
 ///
 /// Empty when: input is empty or ends in whitespace; the token is a lone `!`;
 /// the field after `:` is open-ended; a fixed-value field has no value typed;
-/// or nothing matches. `cycle_idx` selects among matches (alphabetical) and wraps.
+/// or nothing matches. `cycle_idx` selects among matches (alphabetical) and
+/// wraps.
 pub(crate) fn compute_completion(input: &str, cycle_idx: usize) -> String {
     if input.is_empty() || input.ends_with(|c: char| c.is_whitespace()) {
         return String::new();
@@ -84,7 +84,8 @@ pub(crate) fn compute_completion(input: &str, cycle_idx: usize) -> String {
 
 /// Appends a completion suffix to the last token of `input`.
 /// `apply_completion("fol", "der:")` → `"folder:"`;
-/// `apply_completion("!fol", "der:")` → `"!folder:"` (the `!` rides on the token).
+/// `apply_completion("!fol", "der:")` → `"!folder:"` (the `!` rides on the
+/// token).
 pub(crate) fn apply_completion(input: &str, suffix: &str) -> String {
     let last_space = input.rfind(|c: char| c.is_whitespace()).map_or(0, |i| i + 1);
     format!("{}{}{}", &input[..last_space], &input[last_space..], suffix)
