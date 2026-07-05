@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7](https://github.com/szinn/MailKeep/compare/v0.1.6..v0.1.7) - 2026-07-05
+
+### Features
+
+- _(core)_ Add ownership-scoped get_messages_by_ids batch fetch - ([281243a](https://github.com/szinn/MailKeep/commit/281243a34bbd2c91e34cbff5a7b7a484b0ecff04))
+- _(frontend)_ Wire HomePage search results panel - ([bfe2e0f](https://github.com/szinn/MailKeep/commit/bfe2e0fd6170496ecfb8a38424bbf1bb0632a208))
+- _(frontend)_ Add NavBar search bar - ([bce6fa4](https://github.com/szinn/MailKeep/commit/bce6fa4f44a4e753bc29b6f682763eec2c294f7f))
+- _(frontend)_ Add search server fn and results list - ([b8ac8df](https://github.com/szinn/MailKeep/commit/b8ac8df25d49ccc3194761bbe461848103f24f34))
+- _(frontend)_ Add client-side search completion helpers - ([98b1d10](https://github.com/szinn/MailKeep/commit/98b1d10d7bad5e7e70dc664632849fc2f3bb228c))
+
 ## [0.1.6](https://github.com/szinn/MailKeep/compare/v0.1.5..v0.1.6) - 2026-07-05
 
 ### Features

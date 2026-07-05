@@ -3630,7 +3630,7 @@ dependencies = [
 
 [[package]]
 name = "integration-tests"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "async-imap",
  "async-trait",
@@ -4014,7 +4014,7 @@ dependencies = [
 
 [[package]]
 name = "mailkeep"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "anyhow",
  "clap",
@@ -4227,7 +4227,7 @@ dependencies = [
 
 [[package]]
 name = "mk-core"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "argon2",
  "async-trait",
@@ -4252,7 +4252,7 @@ dependencies = [
 
 [[package]]
 name = "mk-database"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "async-trait",
  "chrono",
@@ -4269,7 +4269,7 @@ dependencies = [
 
 [[package]]
 name = "mk-frontend"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4296,7 +4296,7 @@ dependencies = [
 
 [[package]]
 name = "mk-imap"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "async-imap",
  "async-trait",
@@ -4316,7 +4316,7 @@ dependencies = [
 
 [[package]]
 name = "mk-parser"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "async-trait",
  "chrono",
@@ -4329,7 +4329,7 @@ dependencies = [
 
 [[package]]
 name = "mk-search"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "async-trait",
  "chrono",
@@ -4347,7 +4347,7 @@ dependencies = [
 
 [[package]]
 name = "mk-storage"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "async-trait",
  "mk-core",
@@ -4358,7 +4358,7 @@ dependencies = [
 
 [[package]]
 name = "mk-utils"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "rand 0.10.2",
  "serde",
