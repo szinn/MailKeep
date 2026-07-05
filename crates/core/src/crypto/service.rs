@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use chacha20poly1305::{
     ChaCha20Poly1305, Key, Nonce,
-    aead::{Aead, AeadCore, KeyInit, OsRng, Payload},
+    aead::{Aead, Generate, KeyInit, Payload},
 };
 
 use super::master_key::MasterKey;
@@ -31,15 +31,15 @@ struct ChaChaCipherService {
 
 impl ChaChaCipherService {
     fn new(master: &MasterKey) -> Self {
-        let key = Key::from_slice(master.expose());
-        let cipher = ChaCha20Poly1305::new(key);
+        let key = Key::from(*master.expose());
+        let cipher = ChaCha20Poly1305::new(&key);
         Self { cipher }
     }
 }
 
 impl CipherService for ChaChaCipherService {
     fn encrypt(&self, account_id: AccountId, plaintext: &[u8]) -> Ciphertext {
-        let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng);
+        let nonce = Nonce::generate();
         let aad = account_id.to_be_bytes();
         let ct = self
             .cipher
@@ -53,11 +53,11 @@ impl CipherService for ChaChaCipherService {
         let Some(nonce_bytes) = ct.nonce() else {
             return Err(Error::DecryptionFailed);
         };
-        let nonce = Nonce::from_slice(nonce_bytes);
+        let nonce = Nonce::from(*nonce_bytes);
         let aad = account_id.to_be_bytes();
         self.cipher
             .decrypt(
-                nonce,
+                &nonce,
                 Payload {
                     msg: ct.ciphertext_and_tag(),
                     aad: &aad,
