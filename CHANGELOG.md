@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6](https://github.com/szinn/MailKeep/compare/v0.1.5..v0.1.6) - 2026-07-05
+
+### Features
+
+- _(core)_ Wire search_service through CoreServices and start SearchSubsystem - ([819ba05](https://github.com/szinn/MailKeep/commit/819ba05b085228562aac423f1f853bf5f3b16a8e))
+- _(core)_ Add hinted search query grammar parser - ([d56235a](https://github.com/szinn/MailKeep/commit/d56235a4ffa57cc647bb714eb5ec545b6fdde7ee))
+- _(core)_ Scaffold core::search port and result types - ([8ebbfdb](https://github.com/szinn/MailKeep/commit/8ebbfdbe0a9b1e481c4f505ac41abb859a6d38e8))
+- _(database)_ Add messages.indexed watermark and indexer/search repo methods - ([24a83a4](https://github.com/szinn/MailKeep/commit/24a83a41cf1daaaf7fafe830f0ee72d27c7ec93f))
+- _(search)_ Add SearchSubsystem indexer with versioned rebuild and idempotent drain - ([2f28fc4](https://github.com/szinn/MailKeep/commit/2f28fc49dbe86d6b24d60e2496a5a71a01417634))
+- _(search)_ Implement TantivySearchService query, scoping, and folder post-filter - ([95f6c5d](https://github.com/szinn/MailKeep/commit/95f6c5d91eac940e11de7e176bcd20f8f3637fb4))
+- _(search)_ Add Tantivy schema, versioned index, and document mapping - ([cfa1518](https://github.com/szinn/MailKeep/commit/cfa1518e7896bc503d531d7ca5c6f6f208dd50ee))
+
+### Testing
+
+- _(search)_ End-to-end integration coverage + schema-rebuild fix - ([c2c29e1](https://github.com/szinn/MailKeep/commit/c2c29e1bb802bfdcc5ee5b992323196bf94e0737))
+
 ## [0.1.5](https://github.com/szinn/MailKeep/compare/v0.1.4..v0.1.5) - 2026-07-04
 
 ### Features
