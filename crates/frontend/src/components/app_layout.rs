@@ -108,11 +108,11 @@ fn AuthGate() -> Element {
             started.set(true);
             spawn(async move {
                 let mut eval = document::eval(
-                    r#"
+                    r"
                     if (window.__mk_es) { window.__mk_es.close(); }
                     window.__mk_es = new EventSource('/api/v1/events');
                     window.__mk_es.addEventListener('accounts_changed', () => { dioxus.send('x'); });
-                    "#,
+                    ",
                 );
                 while eval.recv::<String>().await.is_ok() {
                     *ACCOUNTS_REVISION.write() += 1;

@@ -383,12 +383,12 @@ mod tests {
         let mut middle_a = new_row(account_id, "<middle-a@example.com>");
         middle_a.token = MessageToken::new(200);
         middle_a.sent_date = Some(base + Duration::days(2));
-        let middle_a_id = svc.message_repository().create(&*tx, middle_a).await.unwrap().id;
+        let middle_low_id = svc.message_repository().create(&*tx, middle_a).await.unwrap().id;
 
         let mut middle_b = new_row(account_id, "<middle-b@example.com>");
         middle_b.token = MessageToken::new(300);
         middle_b.sent_date = Some(base + Duration::days(2));
-        let middle_b_id = svc.message_repository().create(&*tx, middle_b).await.unwrap().id;
+        let middle_high_id = svc.message_repository().create(&*tx, middle_b).await.unwrap().id;
 
         let mut undated = new_row(account_id, "<undated@example.com>");
         undated.token = MessageToken::new(400);
@@ -401,18 +401,18 @@ mod tests {
         let oldest_id = svc.message_repository().create(&*tx, oldest).await.unwrap().id;
 
         // The tie-break check relies on middle_b having the higher id.
-        assert!(middle_b_id > middle_a_id);
+        assert!(middle_high_id > middle_low_id);
 
         // sent_date DESC, NULLS LAST, Id DESC tie-break for the equal (day+2) pair.
         let all = svc.message_repository().list_for_account(&*tx, account_id, 10, 0).await.unwrap();
         let ids: Vec<_> = all.iter().map(|m| m.id).collect();
-        assert_eq!(ids, vec![newest_id, middle_b_id, middle_a_id, oldest_id, undated_id]);
+        assert_eq!(ids, vec![newest_id, middle_high_id, middle_low_id, oldest_id, undated_id]);
 
         // Pagination applies over the same ordering (offset=1, limit=2), including
         // the tie-break within the equal-date pair.
         let page = svc.message_repository().list_for_account(&*tx, account_id, 2, 1).await.unwrap();
         let page_ids: Vec<_> = page.iter().map(|m| m.id).collect();
-        assert_eq!(page_ids, vec![middle_b_id, middle_a_id]);
+        assert_eq!(page_ids, vec![middle_high_id, middle_low_id]);
     }
 
     #[tokio::test]

@@ -40,7 +40,7 @@ impl ContentHash {
             return Err(crate::Error::Validation(format!("ContentHash hex must be 64 chars, got {}", s.len())));
         }
         let mut out = [0u8; 32];
-        for (i, byte_pair) in s.as_bytes().chunks_exact(2).enumerate() {
+        for (i, byte_pair) in s.as_bytes().as_chunks::<2>().0.iter().enumerate() {
             let hex = std::str::from_utf8(byte_pair).map_err(|e| crate::Error::Validation(e.to_string()))?;
             out[i] = u8::from_str_radix(hex, 16).map_err(|e| crate::Error::Validation(e.to_string()))?;
         }
