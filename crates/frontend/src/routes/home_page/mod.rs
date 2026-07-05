@@ -12,13 +12,14 @@ use dioxus::prelude::*;
 use edit_folders_modal::EditFoldersModal;
 use format::{status_icon_color, status_tooltip};
 use message_list::MessageList;
+use search_results::SearchResults;
 use stats_panel::StatsPanel;
 #[cfg(feature = "server")]
 use {crate::routes::server_helpers::authenticated_user, crate::server::AuthSession};
 
 use crate::{
     Route,
-    components::{ACCOUNTS_REVISION, SELECTED_ACCOUNT},
+    components::{ACCOUNTS_REVISION, ACTIVE_SEARCH, SEARCH_QUERY, SELECTED_ACCOUNT},
     routes::account_add_page::{dtos::AccountSummaryDto, list_accounts},
 };
 
@@ -101,16 +102,20 @@ pub(crate) fn HomePage() -> Element {
                     }
                 }
             }
-            // Right panel — statistics when nothing is selected, otherwise the
-            // selected account's message list (keyed so a new selection remounts).
+            // Right panel — search results take priority when a search is active,
+            // then the selected account's message list, else statistics.
             div { class: "flex-1 overflow-auto",
-                match SELECTED_ACCOUNT() {
-                    Some(token) => rsx! {
-                        MessageList { key: "{token}", account_token: token }
-                    },
-                    None => rsx! {
-                        div { class: "p-8", StatsPanel {} }
-                    },
+                if let Some(q) = ACTIVE_SEARCH() {
+                    SearchResults { key: "{q}", query: q }
+                } else {
+                    match SELECTED_ACCOUNT() {
+                        Some(token) => rsx! {
+                            MessageList { key: "{token}", account_token: token }
+                        },
+                        None => rsx! {
+                            div { class: "p-8", StatsPanel {} }
+                        },
+                    }
                 }
             }
         }
@@ -140,6 +145,8 @@ fn AccountRow(account: AccountSummaryDto, refresh: Signal<u32>) -> Element {
                 "flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700/30"
             },
             onclick: move |_| {
+                *ACTIVE_SEARCH.write() = None;
+                *SEARCH_QUERY.write() = String::new();
                 let mut sel = SELECTED_ACCOUNT.write();
                 if sel.as_deref() == Some(row_token.as_str()) {
                     *sel = None;
