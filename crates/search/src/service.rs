@@ -59,19 +59,14 @@ use mk_core::{
     user::UserId,
 };
 use tantivy::{
-    DateTime, DocAddress, TantivyDocument, Term,
+    DateTime, DocAddress, Order, TantivyDocument, Term,
     collector::{Count, TopDocs},
-    query::{BooleanQuery, BoostQuery, EmptyQuery, Occur, PhraseQuery, Query, RangeQuery, TermQuery},
+    query::{BooleanQuery, EmptyQuery, Occur, PhraseQuery, Query, RangeQuery, TermQuery},
     schema::{Field, IndexRecordOption, Value},
     tokenizer::TokenStream,
 };
 
 use crate::{SearchIndex, schema::EN_STEM};
-
-/// Relevance boost applied to a subject match over a body match for the same
-/// bare term, so a term in the subject line outranks the same term buried in
-/// the body.
-const SUBJECT_BOOST: f32 = 2.0;
 
 /// Multiplier applied to the requested page window when a `folder:` post-filter
 /// is present, to leave headroom for documents the DB filter will drop.
@@ -135,16 +130,16 @@ impl TantivySearchService {
         }
     }
 
-    /// A bare full-text query over `subject` OR `body`, with the subject side
-    /// boosted so subject-line matches rank above body-only matches.
+    /// A bare full-text query matching `value` in the `subject` OR `body`
+    /// field.
+    ///
+    /// Both sides are equal `Should` clauses: results are ordered by recency
+    /// (`sent_date`), not relevance, so there is no scoring boost to apply.
     fn bare_query(&self, value: &str) -> Box<dyn Query> {
         let fields = self.index.fields();
         let subject = self.text_field_query(fields.subject, value);
         let body = self.text_field_query(fields.body, value);
-        Box::new(BooleanQuery::new(vec![
-            (Occur::Should, Box::new(BoostQuery::new(subject, SUBJECT_BOOST)) as Box<dyn Query>),
-            (Occur::Should, body),
-        ]))
+        Box::new(BooleanQuery::new(vec![(Occur::Should, subject), (Occur::Should, body)]))
     }
 
     /// Compile one residual clause (never account/folder) into an occurrence +
@@ -345,10 +340,16 @@ impl SearchService for TantivySearchService {
             );
         }
 
-        // One pass: the tuple collector yields the total count and the ranked
-        // page from a single search rather than executing the query twice.
-        let (total, top): (usize, Vec<(f32, DocAddress)>) = searcher
-            .search(&tantivy_query, &(Count, TopDocs::with_limit(fetch).order_by_score()))
+        // One pass: the tuple collector yields the total count and the page from
+        // a single search rather than executing the query twice. Results are
+        // ordered by recency (`sent_date` descending). Undated messages have no
+        // value for the fast field; Tantivy's `Desc` treats a missing value as
+        // lowest, so they sort last — matching the account list's nulls-last.
+        let (total, top): (usize, Vec<(Option<DateTime>, DocAddress)>) = searcher
+            .search(
+                &tantivy_query,
+                &(Count, TopDocs::with_limit(fetch).order_by_fast_field::<DateTime>("sent_date", Order::Desc)),
+            )
             .map_err(|e| tantivy_error(&e))?;
         if !folder_constraints.is_empty() {
             tracing::debug!(total, "search total is an upper bound: folder post-filter may drop matches");
@@ -359,7 +360,7 @@ impl SearchService for TantivySearchService {
         // segment's column once and reuse it for every hit in that segment.
         let mut account_cols = std::collections::HashMap::new();
         let mut hits: Vec<SearchHit> = Vec::with_capacity(top.len());
-        for (score, addr) in top {
+        for (_sent_date, addr) in top {
             let doc: TantivyDocument = searcher.doc(addr).map_err(|e| tantivy_error(&e))?;
             let message_id = doc
                 .get_first(fields.message_id)
@@ -382,7 +383,6 @@ impl SearchService for TantivySearchService {
             hits.push(SearchHit {
                 message_id,
                 account_id,
-                score,
                 snippet,
             });
         }
@@ -602,23 +602,40 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn bare_term_subject_outranks_body() {
+    async fn results_ordered_by_sent_date_desc_nulls_last() {
         let fx = fixture().await;
         let user = make_user(&fx.repo, "alice", "alice@example.com").await;
         let account = make_account(&fx.repo, user, "Primary").await;
 
-        let mut subj = base_row(account, "<subj@x>");
-        subj.subject = Some("Quarterly running report".to_string());
-        let subject_hit = create_and_index(&fx, subj, "unrelated body text").await;
+        // All four match the bare term "report"; indexed out of date order so a
+        // stable insertion/score order would fail. A subject vs. body match is
+        // included to prove relevance no longer drives the order — recency does.
+        let mut older = base_row(account, "<older@x>");
+        older.subject = Some("annual report".to_string());
+        older.sent_date = Some(day(2024, 1, 1));
+        let older_id = create_and_index(&fx, older, "b").await;
 
-        let body = base_row(account, "<body@x>");
-        let body_hit = create_and_index(&fx, body, "the running totals are here").await;
+        let mut newest = base_row(account, "<newest@x>");
+        newest.subject = Some("weekly digest".to_string()); // body-only match, yet newest
+        newest.sent_date = Some(day(2024, 9, 1));
+        let newest_id = create_and_index(&fx, newest, "the report is attached").await;
 
-        let results = fx.service.search(user, "running", 10, 0).await.unwrap();
-        assert_eq!(results.hits.len(), 2, "both docs match");
-        assert_eq!(results.hits[0].message_id, subject_hit, "subject match must rank first");
-        assert_eq!(results.hits[1].message_id, body_hit);
-        assert!(results.hits[0].score > results.hits[1].score, "subject boost must raise the score");
+        let mut middle = base_row(account, "<middle@x>");
+        middle.subject = Some("quarterly report".to_string());
+        middle.sent_date = Some(day(2024, 5, 1));
+        let middle_id = create_and_index(&fx, middle, "b").await;
+
+        let mut undated = base_row(account, "<undated@x>");
+        undated.subject = Some("report".to_string());
+        undated.sent_date = None;
+        let undated_id = create_and_index(&fx, undated, "b").await;
+
+        let results = fx.service.search(user, "report", 10, 0).await.unwrap();
+        assert_eq!(
+            ids(&results),
+            vec![newest_id, middle_id, older_id, undated_id],
+            "results are newest-first by sent_date; undated messages sort last"
+        );
     }
 
     #[tokio::test]

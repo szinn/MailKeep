@@ -206,10 +206,10 @@ async fn end_to_end_archive_index_search() {
     assert_eq!(by_body.hits[0].message_id, news);
 }
 
-// ─── Test 2: BM25 ranking — subject boost ─────────────────────────────────
+// ─── Test 2: bare term matches subject and body ───────────────────────────
 
 #[tokio::test]
-async fn subject_match_outranks_body_match() {
+async fn bare_term_matches_subject_and_body() {
     let ctx = setup().await;
     let user = make_user(&ctx, "alice", "alice@example.com").await;
     let account = make_account(&ctx, user.id, "Primary").await;
@@ -220,11 +220,16 @@ async fn subject_match_outranks_body_match() {
 
     ctx.subsystem.reindex_to_idle().await.unwrap();
 
+    // A bare term matches whether it lands in the subject or the body. Results
+    // are ordered by sent_date (not relevance), and both messages are archived
+    // at ~the same instant, so assert set membership rather than a specific order.
     let results = ctx.services.search_service.search(user.id, "running", 10, 0).await.unwrap();
-    assert_eq!(results.hits.len(), 2, "both match the bare term");
-    assert_eq!(results.hits[0].message_id, in_subject, "subject match ranks first");
-    assert_eq!(results.hits[1].message_id, in_body);
-    assert!(results.hits[0].score > results.hits[1].score, "subject boost raises the score");
+    let hit_ids: HashSet<u64> = results.hits.iter().map(|h| h.message_id).collect();
+    assert_eq!(
+        hit_ids,
+        HashSet::from([in_subject, in_body]),
+        "bare term matches both the subject hit and the body hit"
+    );
 }
 
 // ─── Test 3: per-user scoping isolation ───────────────────────────────────

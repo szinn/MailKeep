@@ -205,7 +205,6 @@ mod tests {
         SearchHit {
             message_id,
             account_id: 1,
-            score: 1.0,
             snippet: String::new(),
         }
     }
