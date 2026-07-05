@@ -30,7 +30,7 @@ mk-storage = { path = "crates/storage" }
 mk-utils = { path = "crates/utils" }
 
 # Test support
-mockall = "0.14.0"
+mockall = "0.15.0"
 
 # Error handling
 anyhow = "1.0.103"
