@@ -300,10 +300,15 @@ impl SearchService for TantivySearchService {
                 let folder_constraints: Vec<(bool, Vec<FolderId>)> = folder_hints
                     .iter()
                     .map(|(negated, name)| {
+                        // Case-insensitive substring match on the folder path or
+                        // display name, so `folder:photography` resolves a nested
+                        // folder like `Hobbies/Photography`.
                         let needle = name.to_lowercase();
                         let ids: Vec<FolderId> = scoped_folders
                             .iter()
-                            .filter(|f| f.path.to_lowercase() == needle || f.display_name.as_deref().is_some_and(|d| d.to_lowercase() == needle))
+                            .filter(|f| {
+                                f.path.to_lowercase().contains(&needle) || f.display_name.as_deref().is_some_and(|d| d.to_lowercase().contains(&needle))
+                            })
                             .map(|f| f.id)
                             .collect();
                         (*negated, ids)
@@ -769,6 +774,35 @@ mod tests {
         // Negated folder excludes the in-folder message.
         let not_inbox = fx.service.search(user, "meeting !folder:INBOX", 10, 0).await.unwrap();
         assert_eq!(ids(&not_inbox), vec![archive_id]);
+    }
+
+    #[tokio::test]
+    async fn folder_hint_matches_path_substring_case_insensitively() {
+        let fx = fixture().await;
+        let user = make_user(&fx.repo, "alice", "alice@example.com").await;
+        let account = make_account(&fx.repo, user, "Primary").await;
+        // A nested folder whose leaf name is "Photography".
+        let photography = make_folder(&fx.repo, account, "Hobbies/Photography").await;
+        let work = make_folder(&fx.repo, account, "Work").await;
+
+        let mut in_photography = base_row(account, "<photo@x>");
+        in_photography.subject = Some("weekend shoot".to_string());
+        let photo_id = create_and_index(&fx, in_photography, "b").await;
+        make_location(&fx.repo, photo_id, photography, 1).await;
+
+        let mut in_work = base_row(account, "<work@x>");
+        in_work.subject = Some("weekend shoot".to_string());
+        let work_id = create_and_index(&fx, in_work, "b").await;
+        make_location(&fx.repo, work_id, work, 2).await;
+
+        // A case-insensitive *substring* of the path resolves the folder:
+        // "photography" matches "Hobbies/Photography" but not "Work".
+        let hit = fx.service.search(user, "shoot folder:photography", 10, 0).await.unwrap();
+        assert_eq!(ids(&hit), vec![photo_id], "folder hint matches the path substring, case-insensitively");
+
+        // Sanity: a substring matching neither folder resolves to nothing.
+        let none = fx.service.search(user, "shoot folder:gardening", 10, 0).await.unwrap();
+        assert!(none.hits.is_empty(), "an unmatched folder substring keeps no messages");
     }
 
     #[tokio::test]
