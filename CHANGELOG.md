@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.8](https://github.com/szinn/MailKeep/compare/v0.1.7..v0.1.8) - 2026-07-05
+
+### Bug Fixes
+
+- _(imap)_ Record folder sync time on every successful scan - ([aaf5c67](https://github.com/szinn/MailKeep/commit/aaf5c6711b594b747bfbcd052357344208f856e2))
+- _(search)_ Order search results by sent_date descending - ([eb25594](https://github.com/szinn/MailKeep/commit/eb25594ecb234d7e3bddc8a271f25fb659a18909))
+- _(search)_ Folder hint matches path substring case-insensitively - ([6e94a14](https://github.com/szinn/MailKeep/commit/6e94a14bc48f18145f644c9b45168b02017a5bec))
+
+### Miscellaneous Tasks
+
+- Clear pre-existing clippy warnings - ([0a53623](https://github.com/szinn/MailKeep/commit/0a536239a47e4a9da316e2ca83ba9dabee114f7b))
+
 ## [0.1.7](https://github.com/szinn/MailKeep/compare/v0.1.6..v0.1.7) - 2026-07-05
 
 ### Features
