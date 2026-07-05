@@ -9,12 +9,12 @@ use mk_core::{
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::Set,
-    ColumnTrait, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect,
+    ColumnTrait, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
     sea_query::{Expr, NullOrdering},
 };
 
 use crate::{
-    entities::{messages, prelude},
+    entities::{accounts, messages, prelude},
     error::handle_dberr,
     transaction::TransactionImpl,
 };
@@ -152,6 +152,35 @@ impl MessageRepository for MessageRepositoryAdapter {
             .order_by_desc(messages::Column::Id)
             .limit(u64::from(limit))
             .offset(u64::from(offset))
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn list_by_ids_for_user(&self, transaction: &dyn Transaction, user_id: mk_core::user::UserId, ids: &[MessageId]) -> Result<Vec<Message>, Error> {
+        if user_id == 0 {
+            return Err(Error::InvalidId(user_id));
+        }
+        // Guard the empty IN () — return early rather than emit invalid SQL.
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+        let id_list: Vec<i64> = ids.iter().map(|id| *id as i64).collect();
+
+        // Ownership scope as a portable subquery: messages whose account is one
+        // of the user's accounts. No raw SQL, no entity Relation needed — works
+        // across Postgres/MySQL/SQLite.
+        let owned_accounts = prelude::Accounts::find()
+            .select_only()
+            .column(accounts::Column::Id)
+            .filter(accounts::Column::UserId.eq(user_id as i64))
+            .into_query();
+
+        let rows = prelude::Messages::find()
+            .filter(messages::Column::Id.is_in(id_list))
+            .filter(messages::Column::AccountId.in_subquery(owned_accounts))
             .all(transaction)
             .await
             .map_err(handle_dberr)?;
@@ -495,6 +524,32 @@ mod tests {
         let mut expected = vec![m1, m2, m3];
         expected.sort_unstable();
         assert_eq!(after, expected, "all rows are unindexed again after reset");
+    }
+
+    #[tokio::test]
+    async fn list_by_ids_for_user_returns_only_owned_and_handles_empty() {
+        let svc = setup().await;
+        let alice = make_user(&svc, "alice", "alice@example.com").await;
+        let bob = make_user(&svc, "bob", "bob@example.com").await;
+        let alice_acct = make_account(&svc, alice, "alice.example.com").await;
+        let bob_acct = make_account(&svc, bob, "bob.example.com").await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let a_msg = svc.message_repository().create(&*tx, new_row(alice_acct, "<a@example.com>")).await.unwrap().id;
+        let b_msg = svc.message_repository().create(&*tx, new_row(bob_acct, "<b@example.com>")).await.unwrap().id;
+
+        // Empty ids → empty, no query.
+        assert!(svc.message_repository().list_by_ids_for_user(&*tx, alice, &[]).await.unwrap().is_empty());
+
+        // Requesting both ids as Alice returns only Alice's message.
+        let got = svc.message_repository().list_by_ids_for_user(&*tx, alice, &[a_msg, b_msg]).await.unwrap();
+        let ids: Vec<_> = got.iter().map(|m| m.id).collect();
+        assert_eq!(ids, vec![a_msg]);
+
+        // Bob sees only his own even when Alice's id is requested.
+        let got_bob = svc.message_repository().list_by_ids_for_user(&*tx, bob, &[a_msg, b_msg]).await.unwrap();
+        let ids_bob: Vec<_> = got_bob.iter().map(|m| m.id).collect();
+        assert_eq!(ids_bob, vec![b_msg]);
     }
 
     #[tokio::test]

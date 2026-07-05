@@ -94,6 +94,10 @@ impl MessageService for NopMessageService {
     async fn list_messages_for_account(&self, _account_id: AccountId, _limit: u32, _offset: u32) -> Result<Vec<Message>, Error> {
         unimplemented!("{PANIC_MSG}")
     }
+
+    async fn get_messages_by_ids(&self, _user_id: mk_core::user::UserId, _ids: &[MessageId]) -> Result<Vec<Message>, Error> {
+        unimplemented!("{PANIC_MSG}")
+    }
 }
 
 /// The nop service trio used to construct a probe-only [`ImapAdapter`].

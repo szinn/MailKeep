@@ -12,6 +12,7 @@ use crate::{
         repository::{NewMessageAttachmentRow, NewMessageLocationRow, NewMessageRow},
     },
     repository::RepositoryService,
+    user::UserId,
     with_read_only_transaction, with_transaction,
 };
 
@@ -33,6 +34,8 @@ pub trait MessageService: Send + Sync {
     async fn get_message_for_account(&self, account_id: AccountId, message_id: MessageId) -> Result<Option<Message>, Error>;
 
     async fn list_messages_for_account(&self, account_id: AccountId, limit: u32, offset: u32) -> Result<Vec<Message>, Error>;
+
+    async fn get_messages_by_ids(&self, user_id: UserId, ids: &[MessageId]) -> Result<Vec<Message>, Error>;
 }
 
 pub(crate) struct MessageServiceImpl {
@@ -153,6 +156,13 @@ impl MessageService for MessageServiceImpl {
         with_read_only_transaction!(self, message_repository, |tx| message_repository
             .list_for_account(tx, account_id, limit, offset)
             .await)
+    }
+
+    async fn get_messages_by_ids(&self, user_id: UserId, ids: &[MessageId]) -> Result<Vec<Message>, Error> {
+        // Own the ids: the macro moves the body into a `'static` future, so a
+        // borrowed slice can't be captured.
+        let ids = ids.to_vec();
+        with_read_only_transaction!(self, message_repository, |tx| message_repository.list_by_ids_for_user(tx, user_id, &ids).await)
     }
 }
 
@@ -572,6 +582,20 @@ mod tests {
         let svc = setup_message_service(message_repo, MockMessageLocationRepository::new(), MockMessageAttachmentRepository::new());
         let messages = svc.list_messages_for_account(1, 50, 10).await.unwrap();
         assert!(messages.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_messages_by_ids_delegates() {
+        let mut message_repo = MockMessageRepository::new();
+        message_repo
+            .expect_list_by_ids_for_user()
+            .withf(|_, user_id, ids| *user_id == 7 && ids == [10u64, 20u64])
+            .times(1)
+            .returning(|_, _, _| Box::pin(async { Ok(vec![]) }));
+
+        let svc = setup_message_service(message_repo, MockMessageLocationRepository::new(), MockMessageAttachmentRepository::new());
+        let out = svc.get_messages_by_ids(7, &[10, 20]).await.unwrap();
+        assert!(out.is_empty());
     }
 
     #[test]

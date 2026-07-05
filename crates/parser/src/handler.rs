@@ -168,6 +168,14 @@ mod tests {
         async fn list_messages_for_account(&self, _account_id: AccountId, _limit: u32, _offset: u32) -> Result<Vec<mk_core::message::Message>, Error> {
             unimplemented!("not needed in this test")
         }
+
+        async fn get_messages_by_ids(
+            &self,
+            _user_id: mk_core::user::UserId,
+            _ids: &[mk_core::message::MessageId],
+        ) -> Result<Vec<mk_core::message::Message>, Error> {
+            unimplemented!("not needed in this test")
+        }
     }
 
     #[tokio::test]

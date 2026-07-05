@@ -73,6 +73,11 @@ pub trait MessageRepository: Send + Sync {
 
     async fn list_for_account(&self, transaction: &dyn Transaction, account_id: AccountId, limit: u32, offset: u32) -> Result<Vec<Message>, Error>;
 
+    /// Fetch the given messages that belong to `user_id` (join through
+    /// `accounts.user_id`), in no particular order. Ownership-scoped: ids not
+    /// owned by the user, or not found, are omitted. Empty `ids` → empty vec.
+    async fn list_by_ids_for_user(&self, transaction: &dyn Transaction, user_id: crate::user::UserId, ids: &[MessageId]) -> Result<Vec<Message>, Error>;
+
     /// Messages awaiting indexing (`indexed = false`), capped at `limit`, in
     /// ascending id order. That order is a stable, deterministic drain order
     /// with no starvation — NOT temporal: message ids are random token-derived
