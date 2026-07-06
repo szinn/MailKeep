@@ -29,14 +29,25 @@
 //! so a std mutex is the simplest correct choice; a `tokio::sync::Mutex` would
 //! buy nothing here.
 //!
+//! ## Folder-only fast path
+//!
+//! A query with `folder:` hints and no full-text / date / attachment terms is a
+//! metadata listing, not a search. It is served directly from the DB
+//! (`list_and_count_by_folders_for_user`), which paginates the whole folder by
+//! `sent_date` with an exact count — so it never loses a folder whose messages
+//! fall outside the bounded Tantivy window. Full-text queries still go through
+//! Tantivy with the `folder:` DB post-filter below.
+//!
 //! ## `total` approximation
 //!
-//! `SearchResults::total` is the Tantivy count of the account-scoped query,
-//! taken *before* the `folder:` DB post-filter. With no `folder:` constraint it
-//! is exact. With one, it is an upper bound (it counts documents the folder
-//! post-filter later drops); this is logged at debug. Approximate totals are an
-//! accepted v1 tradeoff — the alternative (counting post-filtered survivors)
-//! would require fetching every matching document, defeating pagination.
+//! For full-text queries, `SearchResults::total` is the Tantivy count of the
+//! account-scoped query, taken *before* the `folder:` DB post-filter. With no
+//! `folder:` constraint it is exact; with one, it is an upper bound (it counts
+//! documents the folder post-filter later drops), logged at debug. The
+//! folder-only fast path above always returns an exact total. Approximate
+//! totals for folder+text are an accepted v1 tradeoff — the alternative
+//! (counting post-filtered survivors) would require fetching every matching
+//! document, defeating pagination.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -321,6 +332,49 @@ impl SearchService for TantivySearchService {
             return Ok(SearchResults { total: 0, hits: Vec::new() });
         }
 
+        // ---- Folder-only fast path ----
+        // A query with folder hints and NO full-text / date / attachment terms is
+        // a metadata listing, not a search. Serve it straight from the DB so it
+        // paginates the WHOLE folder correctly. The Tantivy `folder:` post-filter
+        // only sees a bounded, recency-ordered window, so a folder whose messages
+        // fall outside that window would return nothing.
+        if residual.is_empty() && !folder_constraints.is_empty() {
+            let mut include_groups: Vec<Vec<FolderId>> = Vec::new();
+            let mut exclude: Vec<FolderId> = Vec::new();
+            for (negated, ids) in &folder_constraints {
+                if *negated {
+                    exclude.extend(ids.iter().copied());
+                } else if ids.is_empty() {
+                    // A required folder hint that matched no real folder can never
+                    // be satisfied → no results.
+                    return Ok(SearchResults { total: 0, hits: Vec::new() });
+                } else {
+                    include_groups.push(ids.clone());
+                }
+            }
+
+            let msg_repo = self.repository_service.message_repository().clone();
+            let repo_db = self.repository_service.repository().clone();
+            let (total, messages) = read_only_transaction(&*repo_db, |tx| {
+                Box::pin(async move {
+                    msg_repo
+                        .list_and_count_by_folders_for_user(tx, user_id, &include_groups, &exclude, limit, offset)
+                        .await
+                })
+            })
+            .await?;
+
+            let hits = messages
+                .into_iter()
+                .map(|m| SearchHit {
+                    message_id: m.id,
+                    account_id: m.account_id,
+                    snippet: m.snippet,
+                })
+                .collect();
+            return Ok(SearchResults { total: total as usize, hits });
+        }
+
         // ---- Tantivy phase: compile + execute the scoped query ----
         let tantivy_query = self.build_query(&scope, &residual);
         let reader = self.index.reader().map_err(|e| index_error(&e))?;
@@ -578,6 +632,16 @@ mod tests {
         writer.commit().unwrap();
     }
 
+    /// Persist a message row WITHOUT indexing it — used to prove the
+    /// folder-only path is served from the DB, independent of the Tantivy
+    /// index/window.
+    async fn create_message(fx: &Fixture, row: NewMessageRow) -> u64 {
+        let tx = fx.repo.repository().begin().await.unwrap();
+        let id = fx.repo.message_repository().create(&*tx, row).await.unwrap().id;
+        tx.commit().await.unwrap();
+        id
+    }
+
     async fn make_location(repo: &RepositoryService, message_id: u64, folder_id: u64, uid: u32) {
         let tx = repo.repository().begin().await.unwrap();
         let row = NewMessageLocationRow {
@@ -820,6 +884,68 @@ mod tests {
         // Sanity: a substring matching neither folder resolves to nothing.
         let none = fx.service.search(user, "shoot folder:gardening", 10, 0).await.unwrap();
         assert!(none.hits.is_empty(), "an unmatched folder substring keeps no messages");
+    }
+
+    #[tokio::test]
+    async fn folder_only_query_lists_whole_folder_from_db() {
+        let fx = fixture().await;
+        let user = make_user(&fx.repo, "alice", "alice@example.com").await;
+        let account = make_account(&fx.repo, user, "Primary").await;
+        let bridge = make_folder(&fx.repo, account, "Hobbies/Bridge").await;
+        let receipts = make_folder(&fx.repo, account, "Receipts").await;
+
+        // Bridge messages: DB rows + locations, deliberately NOT indexed in
+        // Tantivy. A folder-only query must still return them (served from the
+        // DB), proving it does not depend on the bounded Tantivy result window.
+        let mut created = Vec::new();
+        for i in 0..3u32 {
+            let mut row = base_row(account, &format!("<bridge-{i}@x>"));
+            row.subject = Some(format!("hand {i}"));
+            row.sent_date = Some(day(2024, 1, 1 + i));
+            let id = create_message(&fx, row).await;
+            make_location(&fx.repo, id, bridge, i + 1).await;
+            created.push(id);
+        }
+        // A message in another folder must not surface under folder:bridge.
+        let receipt_id = create_message(&fx, base_row(account, "<receipt@x>")).await;
+        make_location(&fx.repo, receipt_id, receipts, 99).await;
+
+        // folder:bridge (substring, folder-only) → all three bridge messages,
+        // newest first, even though none are indexed. Total is exact.
+        let all = fx.service.search(user, "folder:bridge", 10, 0).await.unwrap();
+        assert_eq!(all.total, 3, "exact total across the whole folder");
+        assert_eq!(ids(&all), vec![created[2], created[1], created[0]], "newest first; other folders excluded");
+
+        // Pagination walks the whole folder with no window cliff.
+        let page0 = fx.service.search(user, "folder:bridge", 2, 0).await.unwrap();
+        let page1 = fx.service.search(user, "folder:bridge", 2, 2).await.unwrap();
+        assert_eq!(ids(&page0), vec![created[2], created[1]]);
+        assert_eq!(ids(&page1), vec![created[0]], "last page holds the remainder");
+        assert_eq!((page0.total, page1.total), (3, 3), "total stable across pages");
+    }
+
+    #[tokio::test]
+    async fn folder_only_negation_excludes_that_folder() {
+        let fx = fixture().await;
+        let user = make_user(&fx.repo, "alice", "alice@example.com").await;
+        let account = make_account(&fx.repo, user, "Primary").await;
+        let bridge = make_folder(&fx.repo, account, "Bridge").await;
+        let archive = make_folder(&fx.repo, account, "Archive").await;
+
+        let mut in_bridge = base_row(account, "<b@x>");
+        in_bridge.sent_date = Some(day(2024, 1, 2));
+        let bridge_id = create_message(&fx, in_bridge).await;
+        make_location(&fx.repo, bridge_id, bridge, 1).await;
+
+        let mut in_archive = base_row(account, "<a@x>");
+        in_archive.sent_date = Some(day(2024, 1, 1));
+        let archive_id = create_message(&fx, in_archive).await;
+        make_location(&fx.repo, archive_id, archive, 2).await;
+
+        // A folder-only query that is purely a negation lists everything except
+        // that folder's messages.
+        let not_archive = fx.service.search(user, "!folder:archive", 10, 0).await.unwrap();
+        assert_eq!(ids(&not_archive), vec![bridge_id], "!folder excludes that folder's messages");
     }
 
     #[tokio::test]

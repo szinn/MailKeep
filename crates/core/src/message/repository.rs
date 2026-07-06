@@ -78,6 +78,25 @@ pub trait MessageRepository: Send + Sync {
     /// owned by the user, or not found, are omitted. Empty `ids` → empty vec.
     async fn list_by_ids_for_user(&self, transaction: &dyn Transaction, user_id: crate::user::UserId, ids: &[MessageId]) -> Result<Vec<Message>, Error>;
 
+    /// List the user's messages by folder membership, newest first (by
+    /// `sent_date` desc, nulls last, id desc), for a folder-only search. Each
+    /// group in `include_groups` is a required `folder:` hint (a message must
+    /// have a location in **at least one** folder of **every** group);
+    /// `exclude` holds negated-folder ids (a message must have a location
+    /// in **none** of them). Ownership-scoped to `user_id`. Returns the
+    /// exact total count of qualifying messages alongside the requested
+    /// page — no full-text window, so it paginates the whole folder
+    /// correctly even past thousands of rows.
+    async fn list_and_count_by_folders_for_user(
+        &self,
+        transaction: &dyn Transaction,
+        user_id: crate::user::UserId,
+        include_groups: &[Vec<FolderId>],
+        exclude: &[FolderId],
+        limit: u32,
+        offset: u32,
+    ) -> Result<(u64, Vec<Message>), Error>;
+
     /// Messages awaiting indexing (`indexed = false`), capped at `limit`, in
     /// ascending id order. That order is a stable, deterministic drain order
     /// with no starvation — NOT temporal: message ids are random token-derived

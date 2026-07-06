@@ -2,6 +2,7 @@ use chrono::Utc;
 use mk_core::{
     Error,
     account::AccountId,
+    folder::FolderId,
     message::{Message, MessageId, MessageRepository, MessageToken, NewMessageRow},
     repository::Transaction,
     types::{ContentHash, EmailAddress},
@@ -9,12 +10,12 @@ use mk_core::{
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::Set,
-    ColumnTrait, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
+    ColumnTrait, EntityTrait, Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
     sea_query::{Expr, NullOrdering},
 };
 
 use crate::{
-    entities::{accounts, messages, prelude},
+    entities::{accounts, message_locations, messages, prelude},
     error::handle_dberr,
     transaction::TransactionImpl,
 };
@@ -185,6 +186,65 @@ impl MessageRepository for MessageRepositoryAdapter {
             .await
             .map_err(handle_dberr)?;
         Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn list_and_count_by_folders_for_user(
+        &self,
+        transaction: &dyn Transaction,
+        user_id: mk_core::user::UserId,
+        include_groups: &[Vec<FolderId>],
+        exclude: &[FolderId],
+        limit: u32,
+        offset: u32,
+    ) -> Result<(u64, Vec<Message>), Error> {
+        if user_id == 0 {
+            return Err(Error::InvalidId(user_id));
+        }
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        // Ownership scope: the user's accounts (portable subquery, no raw SQL).
+        let owned_accounts = prelude::Accounts::find()
+            .select_only()
+            .column(accounts::Column::Id)
+            .filter(accounts::Column::UserId.eq(user_id as i64))
+            .into_query();
+        let mut query = prelude::Messages::find().filter(messages::Column::AccountId.in_subquery(owned_accounts));
+
+        // Each required folder group: the message must have a location in at
+        // least one of the group's folders.
+        for group in include_groups {
+            let group_ids: Vec<i64> = group.iter().map(|id| *id as i64).collect();
+            let sub = prelude::MessageLocations::find()
+                .select_only()
+                .column(message_locations::Column::MessageId)
+                .filter(message_locations::Column::FolderId.is_in(group_ids))
+                .into_query();
+            query = query.filter(messages::Column::Id.in_subquery(sub));
+        }
+
+        // Negated folders: the message must have a location in none of them.
+        if !exclude.is_empty() {
+            let exclude_ids: Vec<i64> = exclude.iter().map(|id| *id as i64).collect();
+            let sub = prelude::MessageLocations::find()
+                .select_only()
+                .column(message_locations::Column::MessageId)
+                .filter(message_locations::Column::FolderId.is_in(exclude_ids))
+                .into_query();
+            query = query.filter(messages::Column::Id.not_in_subquery(sub));
+        }
+
+        // Exact total (no full-text window), then the requested page — newest
+        // first, nulls last, id-desc tie-break, matching `list_for_account`.
+        let total = query.clone().count(transaction).await.map_err(handle_dberr)?;
+        let rows = query
+            .order_by_with_nulls(messages::Column::SentDate, Order::Desc, NullOrdering::Last)
+            .order_by_desc(messages::Column::Id)
+            .limit(u64::from(limit))
+            .offset(u64::from(offset))
+            .all(transaction)
+            .await
+            .map_err(handle_dberr)?;
+        Ok((total, rows.into_iter().map(Into::into).collect()))
     }
 
     async fn list_unindexed(&self, transaction: &dyn Transaction, limit: u32) -> Result<Vec<Message>, Error> {
