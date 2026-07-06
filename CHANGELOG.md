@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.9](https://github.com/szinn/MailKeep/compare/v0.1.8..v0.1.9) - 2026-07-06
+
+### Bug Fixes
+
+- _(search)_ List folder-only queries from the DB (unbounded, paginated) - ([0ba3c6f](https://github.com/szinn/MailKeep/commit/0ba3c6f6b585f86a33ecbd7f4196594bb00695b4))
+
 ## [0.1.8](https://github.com/szinn/MailKeep/compare/v0.1.7..v0.1.8) - 2026-07-05
 
 ### Bug Fixes
