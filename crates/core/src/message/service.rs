@@ -8,7 +8,7 @@ use crate::{
     error::RepositoryError,
     folder::FolderId,
     message::{
-        Message, MessageAttachmentToken, MessageFlags, MessageId, MessageLocationToken, MessageToken, ParsedMessage, RecordedMessage,
+        Message, MessageAttachment, MessageAttachmentToken, MessageFlags, MessageId, MessageLocationToken, MessageToken, ParsedMessage, RecordedMessage,
         repository::{NewMessageAttachmentRow, NewMessageLocationRow, NewMessageRow},
     },
     repository::RepositoryService,
@@ -36,6 +36,11 @@ pub trait MessageService: Send + Sync {
     async fn list_messages_for_account(&self, account_id: AccountId, limit: u32, offset: u32) -> Result<Vec<Message>, Error>;
 
     async fn get_messages_by_ids(&self, user_id: UserId, ids: &[MessageId]) -> Result<Vec<Message>, Error>;
+
+    /// Fetch a message by token together with its attachment rows, scoped to
+    /// the requesting user (the message's account must belong to `user_id`).
+    /// Returns `None` when the token is unknown or not owned by the user.
+    async fn get_message_with_attachments(&self, user_id: UserId, token: MessageToken) -> Result<Option<(Message, Vec<MessageAttachment>)>, Error>;
 }
 
 pub(crate) struct MessageServiceImpl {
@@ -164,6 +169,17 @@ impl MessageService for MessageServiceImpl {
         let ids = ids.to_vec();
         with_read_only_transaction!(self, message_repository, |tx| message_repository.list_by_ids_for_user(tx, user_id, &ids).await)
     }
+
+    async fn get_message_with_attachments(&self, user_id: UserId, token: MessageToken) -> Result<Option<(Message, Vec<MessageAttachment>)>, Error> {
+        let message_id = token.id();
+        with_read_only_transaction!(self, message_repository, message_attachment_repository, |tx| {
+            let Some(message) = message_repository.find_by_id_for_user(tx, user_id, message_id).await? else {
+                return Ok(None);
+            };
+            let attachments = message_attachment_repository.list_for_message(tx, message.id).await?;
+            Ok(Some((message, attachments)))
+        })
+    }
 }
 
 #[cfg(test)]
@@ -173,7 +189,7 @@ mod tests {
     use super::*;
     use crate::{
         message::{
-            MessageAttachment, MessageLocation, ParsedAttachment,
+            MessageLocation, ParsedAttachment,
             repository::{MockMessageAttachmentRepository, MockMessageLocationRepository, MockMessageRepository},
         },
         repository::testing::default_repository_service_builder,
@@ -200,6 +216,29 @@ mod tests {
 
     fn attachment_content_hash() -> ContentHash {
         ContentHash::from_hex("c".repeat(64)).unwrap()
+    }
+
+    fn sample_new_row() -> NewMessageRow {
+        NewMessageRow {
+            token: MessageToken::generate(),
+            account_id: 1,
+            rfc822_message_id: "<abc@example.com>".into(),
+            content_hash: sample_content_hash(),
+            subject: Some("Hello".into()),
+            from_address: EmailAddress::new("alice@example.com").unwrap(),
+            from_name: Some("Alice".into()),
+            to_addresses: vec![],
+            cc_addresses: vec![],
+            bcc_addresses: vec![],
+            reply_to_addresses: vec![],
+            sent_date: Some(Utc::now()),
+            in_reply_to: None,
+            references: vec![],
+            snippet: "Hello there".into(),
+            size_bytes: 1024,
+            has_attachments: false,
+            attachment_count: 0,
+        }
     }
 
     fn sample_parsed_message() -> ParsedMessage {
@@ -596,6 +635,49 @@ mod tests {
         let svc = setup_message_service(message_repo, MockMessageLocationRepository::new(), MockMessageAttachmentRepository::new());
         let out = svc.get_messages_by_ids(7, &[10, 20]).await.unwrap();
         assert!(out.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_message_with_attachments_returns_message_and_attachments() {
+        let mut message_repo = MockMessageRepository::new();
+        let mut attachment_repo = MockMessageAttachmentRepository::new();
+
+        let row = NewMessageRow {
+            token: MessageToken::new(42),
+            ..sample_new_row()
+        };
+        message_repo
+            .expect_find_by_id_for_user()
+            .withf(|_, user_id, message_id| *user_id == 7 && *message_id == 42)
+            .times(1)
+            .returning(move |_, _, _| {
+                let row = row.clone();
+                Box::pin(async move { Ok(Some(make_message(42, row))) })
+            });
+        attachment_repo
+            .expect_list_for_message()
+            .withf(|_, message_id| *message_id == 42)
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok(vec![]) }));
+
+        let svc = setup_message_service(message_repo, MockMessageLocationRepository::new(), attachment_repo);
+        let out = svc.get_message_with_attachments(7, MessageToken::new(42)).await.unwrap();
+        let (message, attachments) = out.expect("owner sees the message");
+        assert_eq!(message.id, 42);
+        assert!(attachments.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_message_with_attachments_none_for_foreign_token() {
+        let mut message_repo = MockMessageRepository::new();
+        message_repo
+            .expect_find_by_id_for_user()
+            .times(1)
+            .returning(|_, _, _| Box::pin(async { Ok(None) }));
+        // list_for_message must NOT be called when the message is not found.
+        let svc = setup_message_service(message_repo, MockMessageLocationRepository::new(), MockMessageAttachmentRepository::new());
+        let out = svc.get_message_with_attachments(7, MessageToken::new(42)).await.unwrap();
+        assert!(out.is_none());
     }
 
     #[test]

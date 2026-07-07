@@ -15,7 +15,7 @@ use mk_core::{
     account::AccountId,
     folder::{Folder, FolderId, FolderService, NewFolderRequest},
     ingest::{IngestRequest, IngestResult, IngestService},
-    message::{Message, MessageFlags, MessageId, MessageService, ParsedMessage, RecordedMessage},
+    message::{Message, MessageAttachment, MessageFlags, MessageId, MessageService, MessageToken, ParsedMessage, RecordedMessage},
 };
 
 const PANIC_MSG: &str = "probe-only adapter: sync services are not available";
@@ -96,6 +96,14 @@ impl MessageService for NopMessageService {
     }
 
     async fn get_messages_by_ids(&self, _user_id: mk_core::user::UserId, _ids: &[MessageId]) -> Result<Vec<Message>, Error> {
+        unimplemented!("{PANIC_MSG}")
+    }
+
+    async fn get_message_with_attachments(
+        &self,
+        _user_id: mk_core::user::UserId,
+        _token: MessageToken,
+    ) -> Result<Option<(Message, Vec<MessageAttachment>)>, Error> {
         unimplemented!("{PANIC_MSG}")
     }
 }

@@ -176,6 +176,14 @@ mod tests {
         ) -> Result<Vec<mk_core::message::Message>, Error> {
             unimplemented!("not needed in this test")
         }
+
+        async fn get_message_with_attachments(
+            &self,
+            _user_id: mk_core::user::UserId,
+            _token: mk_core::message::MessageToken,
+        ) -> Result<Option<(mk_core::message::Message, Vec<mk_core::message::MessageAttachment>)>, Error> {
+            unimplemented!("not needed in this test")
+        }
     }
 
     #[tokio::test]

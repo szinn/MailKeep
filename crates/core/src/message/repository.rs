@@ -78,6 +78,12 @@ pub trait MessageRepository: Send + Sync {
     /// owned by the user, or not found, are omitted. Empty `ids` → empty vec.
     async fn list_by_ids_for_user(&self, transaction: &dyn Transaction, user_id: crate::user::UserId, ids: &[MessageId]) -> Result<Vec<Message>, Error>;
 
+    /// Fetch a single message by id, scoped to `user_id` (the message's
+    /// account must belong to the user). Ownership-scoped with the same
+    /// `in_subquery` idiom as `list_by_ids_for_user`. Returns `None` when the
+    /// id is unknown or not owned by the user.
+    async fn find_by_id_for_user(&self, transaction: &dyn Transaction, user_id: crate::user::UserId, message_id: MessageId) -> Result<Option<Message>, Error>;
+
     /// List the user's messages by folder membership, newest first (by
     /// `sent_date` desc, nulls last, id desc), for a folder-only search. Each
     /// group in `include_groups` is a required `folder:` hint (a message must

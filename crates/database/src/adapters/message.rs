@@ -188,6 +188,36 @@ impl MessageRepository for MessageRepositoryAdapter {
         Ok(rows.into_iter().map(Into::into).collect())
     }
 
+    async fn find_by_id_for_user(
+        &self,
+        transaction: &dyn Transaction,
+        user_id: mk_core::user::UserId,
+        message_id: MessageId,
+    ) -> Result<Option<Message>, Error> {
+        if user_id == 0 {
+            return Err(Error::InvalidId(user_id));
+        }
+        if message_id == 0 {
+            return Err(Error::InvalidId(message_id));
+        }
+        let transaction = TransactionImpl::get_db_transaction(transaction)?;
+
+        // Ownership scope as a portable subquery: the message's account must be
+        // one of the user's accounts. No raw SQL — works on PG/MySQL/SQLite.
+        let owned_accounts = prelude::Accounts::find()
+            .select_only()
+            .column(accounts::Column::Id)
+            .filter(accounts::Column::UserId.eq(user_id as i64))
+            .into_query();
+
+        Ok(prelude::Messages::find_by_id(message_id as i64)
+            .filter(messages::Column::AccountId.in_subquery(owned_accounts))
+            .one(transaction)
+            .await
+            .map_err(handle_dberr)?
+            .map(Into::into))
+    }
+
     async fn list_and_count_by_folders_for_user(
         &self,
         transaction: &dyn Transaction,
@@ -610,6 +640,29 @@ mod tests {
         let got_bob = svc.message_repository().list_by_ids_for_user(&*tx, bob, &[a_msg, b_msg]).await.unwrap();
         let ids_bob: Vec<_> = got_bob.iter().map(|m| m.id).collect();
         assert_eq!(ids_bob, vec![b_msg]);
+    }
+
+    #[tokio::test]
+    async fn find_by_id_for_user_scopes_to_owner() {
+        let svc = setup().await;
+        let alice = make_user(&svc, "alice", "alice@example.com").await;
+        let bob = make_user(&svc, "bob", "bob@example.com").await;
+        let alice_acct = make_account(&svc, alice, "alice.example.com").await;
+        let tx = svc.repository().begin().await.unwrap();
+
+        let a_msg = svc.message_repository().create(&*tx, new_row(alice_acct, "<a@example.com>")).await.unwrap().id;
+
+        // Owner sees it.
+        let got = svc.message_repository().find_by_id_for_user(&*tx, alice, a_msg).await.unwrap();
+        assert_eq!(got.map(|m| m.id), Some(a_msg));
+
+        // Foreign user does not.
+        let none = svc.message_repository().find_by_id_for_user(&*tx, bob, a_msg).await.unwrap();
+        assert!(none.is_none());
+
+        // Unknown id is None.
+        let missing = svc.message_repository().find_by_id_for_user(&*tx, alice, 9_999_999).await.unwrap();
+        assert!(missing.is_none());
     }
 
     #[tokio::test]
