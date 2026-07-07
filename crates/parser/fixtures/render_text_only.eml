@@ -1,0 +1,6 @@
+From: alice@example.com
+To: bob@example.com
+Subject: Text only
+Content-Type: text/plain; charset=utf-8
+
+This is a plain body with no HTML.

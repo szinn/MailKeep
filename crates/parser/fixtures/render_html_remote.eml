@@ -1,0 +1,6 @@
+From: alice@example.com
+To: bob@example.com
+Subject: Remote image
+Content-Type: text/html; charset=utf-8
+
+<html><body><p>Newsletter</p><img src="http://track.example.com/pixel.gif" width="1" height="1"></body></html>

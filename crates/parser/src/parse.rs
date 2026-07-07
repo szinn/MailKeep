@@ -144,7 +144,7 @@ fn address_list(addr: Option<&mail_parser::Address<'_>>) -> Vec<NamedAddress> {
         .collect()
 }
 
-fn content_type_string(part: &mail_parser::MessagePart<'_>) -> String {
+pub(crate) fn content_type_string(part: &mail_parser::MessagePart<'_>) -> String {
     part.content_type().map_or_else(
         || "application/octet-stream".to_string(),
         |ct| match ct.subtype() {

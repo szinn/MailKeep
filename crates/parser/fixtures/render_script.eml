@@ -1,0 +1,6 @@
+From: alice@example.com
+To: bob@example.com
+Subject: Scripted
+Content-Type: text/html; charset=utf-8
+
+<html><body><p onclick="alert('x')">Hello</p><script>alert('boom')</script><a href="javascript:alert(1)">link</a></body></html>
