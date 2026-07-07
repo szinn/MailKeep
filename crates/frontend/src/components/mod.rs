@@ -17,5 +17,5 @@ pub(crate) use message_row::{MessageRow, MessageRowDto};
 pub(crate) use nav_bar::NavBar;
 pub(crate) use register_admin_form::RegisterAdminForm;
 pub(crate) use search::{ACTIVE_SEARCH, SEARCH_QUERY};
-pub(crate) use selection::SELECTED_ACCOUNT;
+pub(crate) use selection::{OPEN_MESSAGE, SELECTED_ACCOUNT};
 pub(crate) use theme::{THEME_MODE, set_theme_preference};

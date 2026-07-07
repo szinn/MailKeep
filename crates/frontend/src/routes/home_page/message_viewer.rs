@@ -106,6 +106,151 @@ fn build_dto(
     }
 }
 
+/// Assemble the iframe `srcdoc`: a minimal document wrapping the sanitized body
+/// with a strict CSP and a new-tab base target. `img-src` widens only when the
+/// user has opted into remote content.
+fn build_srcdoc(body_html: &str, load_remote: bool) -> String {
+    let img_src = if load_remote {
+        "img-src 'self' data: https: http:"
+    } else {
+        "img-src 'self' data:"
+    };
+    format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; base-uri 'none'; \
+         {img_src}; font-src 'self'\"><base target=\"_blank\"><meta name=\"color-scheme\" content=\"light\"></head><body>{body_html}</body></html>"
+    )
+}
+
+#[component]
+pub(crate) fn MessageViewer(token: String) -> Element {
+    let mut load_remote = use_signal(|| false);
+
+    // Keyed on token + load_remote so a re-fetch (opt-in) re-runs cleanly.
+    let view = use_resource({
+        let token = token.clone();
+        move || {
+            let token = token.clone();
+            async move { view_message(token, load_remote()).await.map_err(|e| e.to_string()) }
+        }
+    });
+
+    let iframe_id = format!("mk-msg-frame-{token}");
+
+    rsx! {
+        div { class: "flex h-full flex-col",
+            // Header bar with a ✕ that closes the viewer.
+            div { class: "flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-slate-700",
+                h2 { class: "truncate text-sm font-semibold text-gray-900 dark:text-slate-100", "Message" }
+                button {
+                    class: "shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-slate-700",
+                    title: "Close",
+                    onclick: move |_| { *crate::components::OPEN_MESSAGE.write() = None; },
+                    "✕"
+                }
+            }
+            div { class: "flex-1 overflow-auto",
+                match view() {
+                    None => rsx! {
+                        div { class: "px-4 py-6 text-sm text-gray-400 dark:text-slate-500", "Loading…" }
+                    },
+                    Some(Err(e)) => rsx! {
+                        div { class: "px-4 py-3 text-sm text-red-600 dark:text-red-400", "{e}" }
+                    },
+                    Some(Ok(msg)) => rsx! {
+                        // Headers.
+                        div { class: "space-y-1 border-b border-gray-100 px-4 py-3 dark:border-slate-700",
+                            div { class: "text-base font-semibold text-gray-900 dark:text-slate-100",
+                                "{msg.subject.clone().unwrap_or_else(|| \"(no subject)\".to_string())}"
+                            }
+                            div { class: "text-sm text-gray-600 dark:text-slate-300", "From: {msg.from}" }
+                            if !msg.to.is_empty() {
+                                div { class: "text-xs text-gray-500 dark:text-slate-400", "To: {msg.to.join(\", \")}" }
+                            }
+                            if !msg.cc.is_empty() {
+                                div { class: "text-xs text-gray-500 dark:text-slate-400", "Cc: {msg.cc.join(\", \")}" }
+                            }
+                            if let Some(when) = msg.date_display.clone() {
+                                div { class: "text-xs text-gray-400 dark:text-slate-500", "{when}" }
+                            }
+                        }
+                        // Remote-content opt-in bar.
+                        if msg.has_remote_content && !load_remote() {
+                            div { class: "flex items-center justify-between gap-2 bg-amber-50 px-4 py-2 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-200",
+                                span { "Remote images are blocked to protect your privacy." }
+                                button {
+                                    class: "shrink-0 rounded border border-amber-300 px-2 py-1 font-medium hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900/50",
+                                    onclick: move |_| load_remote.set(true),
+                                    "Load remote content"
+                                }
+                            }
+                        }
+                        // Body.
+                        if let Some(html) = msg.body_html.clone() {
+                            iframe {
+                                id: "{iframe_id}",
+                                class: "w-full border-0",
+                                title: "Message content",
+                                srcdoc: build_srcdoc(&html, load_remote()),
+                                "sandbox": "allow-popups allow-popups-to-escape-sandbox allow-same-origin",
+                                referrerpolicy: "no-referrer",
+                                // Auto-height once the srcdoc document parses. No
+                                // scripts run inside the frame; allow-same-origin
+                                // permits reading scrollHeight from the parent.
+                                // For an inline srcdoc the load event can fire
+                                // before onload is attached, so also size
+                                // immediately if the frame is already complete.
+                                onmounted: {
+                                    let id = iframe_id.clone();
+                                    move |_| {
+                                        let id = id.clone();
+                                        spawn(async move {
+                                            let js = format!(
+                                                "const f=document.getElementById('{id}');\
+                                                 if(f){{const a=()=>{{try{{f.style.height=(f.contentDocument.body.scrollHeight+24)+'px';}}catch(e){{}}}};\
+                                                 f.onload=a;\
+                                                 if(f.contentDocument&&f.contentDocument.readyState==='complete')a();}}"
+                                            );
+                                            let _ = document::eval(&js).await;
+                                        });
+                                    }
+                                },
+                            }
+                        } else if let Some(text) = msg.body_text.clone() {
+                            pre { class: "whitespace-pre-wrap px-4 py-3 text-sm text-gray-800 dark:text-slate-200", "{text}" }
+                        } else {
+                            div { class: "px-4 py-6 text-sm text-gray-400 dark:text-slate-500", "This message has no displayable content." }
+                        }
+                        // Attachments.
+                        if !msg.attachments.is_empty() {
+                            div { class: "border-t border-gray-100 px-4 py-3 dark:border-slate-700",
+                                div { class: "mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-slate-400", "Attachments" }
+                                ul { class: "space-y-1",
+                                    for att in msg.attachments.iter().cloned() {
+                                        li {
+                                            key: "{att.token}",
+                                            class: "flex items-center justify-between gap-2 text-sm text-gray-700 dark:text-slate-200",
+                                            span { class: "truncate",
+                                                "📎 {att.filename.clone().unwrap_or_else(|| att.content_type.clone())}"
+                                            }
+                                            button {
+                                                class: "shrink-0 rounded border border-gray-200 px-2 py-1 text-xs text-gray-500 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700",
+                                                title: "Download (coming soon)",
+                                                // MK-24 download seam — no-op for now.
+                                                onclick: move |_| {},
+                                                "Download"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                }
+            }
+        }
+    }
+}
+
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use mk_core::{
@@ -193,6 +338,23 @@ mod tests {
         message.from_name = None;
         let dto = build_dto(&message, &[], None);
         assert_eq!(dto.from, "alice@example.com");
+    }
+
+    #[test]
+    fn build_srcdoc_pins_security_contract() {
+        // Blocked (default) mode: strict CSP, no remote schemes, new-tab base,
+        // and the body passed through verbatim.
+        let blocked = build_srcdoc("<p>x</p>", false);
+        assert!(blocked.contains("default-src 'none'"));
+        assert!(blocked.contains("base-uri 'none'"));
+        assert!(blocked.contains("img-src 'self' data:"));
+        assert!(!blocked.contains("https:"), "blocked mode must not permit remote image schemes");
+        assert!(blocked.contains("<base target=\"_blank\">"));
+        assert!(blocked.contains("<p>x</p>"));
+
+        // Opt-in mode widens img-src to remote schemes.
+        let allowed = build_srcdoc("<p>x</p>", true);
+        assert!(allowed.contains("img-src 'self' data: https: http:"));
     }
 
     #[test]

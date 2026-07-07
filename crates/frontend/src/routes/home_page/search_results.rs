@@ -153,8 +153,8 @@ pub(crate) fn SearchResults(query: String) -> Element {
                                     MessageRow {
                                         key: "{row.token}",
                                         row,
-                                        on_open: move |_token: String| {
-                                            // MK-23 viewer navigation seam — no-op for now.
+                                        on_open: move |token: String| {
+                                            *crate::components::OPEN_MESSAGE.write() = Some(token);
                                         },
                                     }
                                 }

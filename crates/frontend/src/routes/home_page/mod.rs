@@ -13,6 +13,7 @@ use dioxus::prelude::*;
 use edit_folders_modal::EditFoldersModal;
 use format::{status_icon_color, status_tooltip};
 use message_list::MessageList;
+use message_viewer::MessageViewer;
 use search_results::SearchResults;
 use stats_panel::StatsPanel;
 #[cfg(feature = "server")]
@@ -20,7 +21,7 @@ use {crate::routes::server_helpers::authenticated_user, crate::server::AuthSessi
 
 use crate::{
     Route,
-    components::{ACCOUNTS_REVISION, ACTIVE_SEARCH, SEARCH_QUERY, SELECTED_ACCOUNT},
+    components::{ACCOUNTS_REVISION, ACTIVE_SEARCH, OPEN_MESSAGE, SEARCH_QUERY, SELECTED_ACCOUNT},
     routes::account_add_page::{dtos::AccountSummaryDto, list_accounts},
 };
 
@@ -54,13 +55,16 @@ pub(crate) fn HomePage() -> Element {
     // Reconcile selection against the account list: if the selected account is
     // gone (deleted here, or removed by a server push via ACCOUNTS_REVISION),
     // collapse the right panel back to statistics rather than leaving a stale,
-    // 404ing message list selected.
+    // 404ing message list selected. Also close the viewer in the same branch —
+    // its open message may belong to the now-gone account (OPEN_MESSAGE holds a
+    // message token, so it can't be matched against the account list directly).
     use_effect(move || {
         if let Some(Ok(rows)) = accounts()
             && let Some(token) = SELECTED_ACCOUNT()
             && !rows.iter().any(|a| a.token == token)
         {
             *SELECTED_ACCOUNT.write() = None;
+            *OPEN_MESSAGE.write() = None;
         }
     });
 
@@ -103,10 +107,12 @@ pub(crate) fn HomePage() -> Element {
                     }
                 }
             }
-            // Right panel — search results take priority when a search is active,
+            // Right panel — the open message takes priority, then active search,
             // then the selected account's message list, else statistics.
             div { class: "flex-1 overflow-auto",
-                if let Some(q) = ACTIVE_SEARCH() {
+                if let Some(t) = OPEN_MESSAGE() {
+                    MessageViewer { key: "{t}", token: t }
+                } else if let Some(q) = ACTIVE_SEARCH() {
                     SearchResults { key: "{q}", query: q }
                 } else {
                     match SELECTED_ACCOUNT() {
@@ -146,6 +152,7 @@ fn AccountRow(account: AccountSummaryDto, refresh: Signal<u32>) -> Element {
                 "flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700/30"
             },
             onclick: move |_| {
+                *OPEN_MESSAGE.write() = None;
                 *ACTIVE_SEARCH.write() = None;
                 *SEARCH_QUERY.write() = String::new();
                 let mut sel = SELECTED_ACCOUNT.write();

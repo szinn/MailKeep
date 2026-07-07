@@ -5,3 +5,9 @@ use dioxus::prelude::*;
 /// toggle and the nav-bar Home button can drive the right panel — mirrors the
 /// `ACCOUNTS_REVISION` / `THEME_MODE` idiom.
 pub(crate) static SELECTED_ACCOUNT: GlobalSignal<Option<String>> = Signal::global(|| None);
+
+/// The message token currently open in the viewer, or `None`. Highest-priority
+/// HomePage right-panel mode (over search and account selection). Set by the
+/// `on_open` row seam; cleared by the viewer's ✕, account selection, and
+/// search submission. Mirrors the `SELECTED_ACCOUNT` idiom.
+pub(crate) static OPEN_MESSAGE: GlobalSignal<Option<String>> = Signal::global(|| None);

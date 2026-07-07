@@ -266,6 +266,7 @@ fn SearchBar() -> Element {
                                             // Submit: one Tantivy query per Enter. Whitespace-only clears.
                                             let trimmed = SEARCH_QUERY().trim().to_string();
                                             *ACTIVE_SEARCH.write() = if trimmed.is_empty() { None } else { Some(trimmed) };
+                                            *crate::components::OPEN_MESSAGE.write() = None;
                                             completion.set(String::new());
                                             cycle_prefix.set(String::new());
                                             cycle_idx.set(0);
