@@ -11,6 +11,7 @@ repository = { workspace = true }
 
 [dependencies]
 mk-core = { workspace = true, optional = true }
+mk-parser = { workspace = true, optional = true }
 
 anyhow = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
@@ -48,6 +49,7 @@ server = [
     "dep:axum_session",
     "dep:axum_session_auth",
     "dep:mk-core",
+    "dep:mk-parser",
     "dep:thiserror",
     "dep:tower",
     "dep:tower-http",

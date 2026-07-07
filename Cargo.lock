@@ -4347,6 +4347,7 @@ dependencies = [
  "dioxus-server",
  "futures",
  "mk-core",
+ "mk-parser",
  "openidconnect",
  "rand 0.10.2",
  "secrecy",
