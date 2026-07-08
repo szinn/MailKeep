@@ -109,6 +109,16 @@ fn build_dto(
 /// Assemble the iframe `srcdoc`: a minimal document wrapping the sanitized body
 /// with a strict CSP and a new-tab base target. `img-src` widens only when the
 /// user has opted into remote content.
+///
+/// Emails are always rendered as a light document, independent of MailKeep's
+/// own light/dark theme: the sanitizer strips all author CSS (`<style>` and
+/// `style=`), so a body with no explicit surface is transparent and lets the
+/// app's dark backdrop bleed through behind the email's default-black text.
+/// `color-scheme: light` alone only pins the UA scheme — it does not guarantee
+/// an opaque surface. We force an opaque white background and dark default text
+/// with the legacy `bgcolor`/`text` body attributes: these are presentational
+/// HTML hints, not CSS, so they take effect under the strict `default-src
+/// 'none'` CSP (which would otherwise block an injected `<style>`).
 fn build_srcdoc(body_html: &str, load_remote: bool) -> String {
     let img_src = if load_remote {
         "img-src 'self' data: https: http:"
@@ -117,7 +127,8 @@ fn build_srcdoc(body_html: &str, load_remote: bool) -> String {
     };
     format!(
         "<!doctype html><html><head><meta charset=\"utf-8\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; base-uri 'none'; \
-         {img_src}; font-src 'self'\"><base target=\"_blank\"><meta name=\"color-scheme\" content=\"light\"></head><body>{body_html}</body></html>"
+         {img_src}; font-src 'self'\"><base target=\"_blank\"><meta name=\"color-scheme\" content=\"light\"></head><body bgcolor=\"#ffffff\" \
+         text=\"#111827\">{body_html}</body></html>"
     )
 }
 
@@ -351,6 +362,16 @@ mod tests {
         assert!(!blocked.contains("https:"), "blocked mode must not permit remote image schemes");
         assert!(blocked.contains("<base target=\"_blank\">"));
         assert!(blocked.contains("<p>x</p>"));
+
+        // Emails render as an opaque light document regardless of MailKeep's
+        // theme: pin the UA scheme and force a white surface with dark text via
+        // presentational body attributes (CSP-safe; a `<style>` would be blocked
+        // by `default-src 'none'`). Without this the dark app backdrop bleeds
+        // through the transparent frame behind the email's default-black text.
+        assert!(blocked.contains("<meta name=\"color-scheme\" content=\"light\">"));
+        assert!(blocked.contains("bgcolor=\"#ffffff\""), "email frame must have an opaque light background");
+        assert!(blocked.contains("text=\"#111827\""), "email frame must set a dark default text color");
+        assert!(!blocked.contains("<style"), "no injected <style>: it would be blocked by the strict CSP");
 
         // Opt-in mode widens img-src to remote schemes.
         let allowed = build_srcdoc("<p>x</p>", true);
