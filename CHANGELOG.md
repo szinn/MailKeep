@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.10](https://github.com/szinn/MailKeep/compare/v0.1.9..v0.1.10) - 2026-07-08
+
+### Features
+
+- _(core)_ Ownership-scoped get_message_with_attachments - ([51dbd17](https://github.com/szinn/MailKeep/commit/51dbd172662f517d7ee869c7030fcb230739117a))
+- _(frontend)_ Close message viewer on Escape - ([53a27c3](https://github.com/szinn/MailKeep/commit/53a27c32857792488adb12f688ec40cbcac19915))
+- _(frontend)_ Email viewer panel with sandboxed iframe - ([b336ceb](https://github.com/szinn/MailKeep/commit/b336ceb91eebdeb2a0dc6a1357c450405b2e9cbf))
+- _(frontend)_ View_message server fn and MessageViewDto - ([938cac5](https://github.com/szinn/MailKeep/commit/938cac5a8f9051857bfd59df7d9bcd75553b8b25))
+- _(parser)_ Render_message_for_display with ammonia sanitization - ([5381d7c](https://github.com/szinn/MailKeep/commit/5381d7cfd711c89c51a64969c3f58a5608ccc1f2))
+
+### Bug Fixes
+
+- _(frontend)_ Render email bodies on an opaque light surface - ([068fb28](https://github.com/szinn/MailKeep/commit/068fb28366757570617c8ce68a420fcd11609166))
+
 ## [0.1.9](https://github.com/szinn/MailKeep/compare/v0.1.8..v0.1.9) - 2026-07-06
 
 ### Bug Fixes
