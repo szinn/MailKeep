@@ -70,6 +70,7 @@
       "mcp__issueboss__create_issue",
       "mcp__issueboss__list_artifacts",
       "mcp__issueboss__list_issues",
+      "mcp__issueboss__list_open_issues",
       "mcp__issueboss__list_relationships",
       "mcp__issueboss__move_artifact",
       "mcp__issueboss__remove_artifact",
