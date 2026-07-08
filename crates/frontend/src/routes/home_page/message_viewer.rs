@@ -148,7 +148,22 @@ pub(crate) fn MessageViewer(token: String) -> Element {
     let iframe_id = format!("mk-msg-frame-{token}");
 
     rsx! {
-        div { class: "flex h-full flex-col",
+        // Escape closes the viewer, returning to whatever list was showing:
+        // clearing OPEN_MESSAGE falls back through the HomePage priority chain
+        // (active search → selected account's list → stats). Self-focus on mount
+        // so the key fires immediately; the same tabindex/set_focus/onkeydown
+        // idiom as the settings modals. (Once the user clicks into the sandboxed
+        // email iframe, focus leaves this wrapper and Escape no longer reaches
+        // it — the ✕ button remains the fallback.)
+        div {
+            class: "flex h-full flex-col focus:outline-none",
+            tabindex: -1,
+            onmounted: move |e| async move { let _ = e.set_focus(true).await; },
+            onkeydown: move |e| {
+                if e.key() == Key::Escape {
+                    *crate::components::OPEN_MESSAGE.write() = None;
+                }
+            },
             // Header bar with a ✕ that closes the viewer.
             div { class: "flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-slate-700",
                 h2 { class: "truncate text-sm font-semibold text-gray-900 dark:text-slate-100", "Message" }
