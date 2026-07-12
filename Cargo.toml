@@ -45,7 +45,7 @@ secrecy = "0.10.3"
 sha2 = "0.11.0"
 
 bytes = "1.12.1"
-mail-parser = "0.11.4"
+mail-parser = "0.11.5"
 
 # HTML email rendering
 ammonia = "4.1.3"
