@@ -58,7 +58,7 @@ tantivy = "0.26.1"
 mimalloc = "0.1.52"
 
 # IMAP adapter
-async-imap = { version = "0.11.2", default-features = false, features = [
+async-imap = { version = "0.11.3", default-features = false, features = [
     "runtime-tokio",
 ] }
 futures = "0.3.32"
