@@ -73,7 +73,7 @@ tokio-rustls = { version = "0.26.4", default-features = false, features = [
     "logging",
     "tls12",
 ] }
-webpki-roots = "1.0.8"
+webpki-roots = "1.0.9"
 
 # Async
 async-trait = "0.1.89"
