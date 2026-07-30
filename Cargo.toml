@@ -34,7 +34,7 @@ mockall = "0.15.0"
 
 # Error handling
 anyhow = "1.0.103"
-thiserror = "2.0.18"
+thiserror = "2.0.19"
 
 # Crypto
 argon2 = { version = "0.5.3", features = ["std"] }
