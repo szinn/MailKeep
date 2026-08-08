@@ -30,7 +30,6 @@ crates/
 ├── core/               # Domain layer: business logic, domain models, and port traits (interfaces)
 ├── database/           # Adapter: implements persistence ports defined in core (SeaORM/Postgres)
 ├── frontend/           # Adapter: user interface, calls into core ports
-├── utils/              # Shared utilities: hashing, token generation
 ├── mailkeep/           # Application entry point, wires adapters to ports
 └── integration-tests/  # Integration tests
 ```

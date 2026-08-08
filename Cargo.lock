@@ -4320,7 +4320,6 @@ dependencies = [
  "futures",
  "hkdf 0.13.0",
  "insta",
- "mk-utils",
  "mockall",
  "secrecy",
  "serde",
@@ -4439,16 +4438,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "tokio",
-]
-
-[[package]]
-name = "mk-utils"
-version = "0.1.11"
-dependencies = [
- "rand 0.10.2",
- "serde",
- "serde_json",
- "thiserror 2.0.19",
 ]
 
 [[package]]

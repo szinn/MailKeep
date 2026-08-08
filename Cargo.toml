@@ -27,7 +27,6 @@ mk-frontend = { path = "crates/frontend" }
 mk-parser = { path = "crates/parser" }
 mk-search = { path = "crates/search" }
 mk-storage = { path = "crates/storage" }
-mk-utils = { path = "crates/utils" }
 
 # Test support
 mockall = "0.15.0"
@@ -264,8 +263,6 @@ opt-level = 1
 [profile.dev.package.mk-frontend]
 opt-level = 1
 [profile.dev.package.mk-storage]
-opt-level = 1
-[profile.dev.package.mk-utils]
 opt-level = 1
 [profile.dev.package.mk-parser]
 opt-level = 1

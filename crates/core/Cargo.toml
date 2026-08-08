@@ -14,7 +14,6 @@ test-support = ["dep:mockall"]
 
 [dependencies]
 mockall = { workspace = true, optional = true }
-mk-utils.workspace = true
 alderkit-token.workspace = true
 
 argon2.workspace = true
