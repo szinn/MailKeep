@@ -12,6 +12,7 @@ pub mod repository;
 pub mod search;
 pub mod stats;
 pub mod storage;
+pub mod token;
 pub mod types;
 pub mod user;
 
