@@ -23,4 +23,10 @@ mod tests {
         assert_eq!(GoldenToken::new(0).to_string(), "G_YYYYYYYYYYYYY");
         assert_eq!(GoldenToken::new(1).to_string(), "G_YYYYYYYYYYYY4");
     }
+
+    #[test]
+    fn alphabet_matches_pre_migration_bytes() {
+        use alderkit_token::token::Alphabet;
+        assert_eq!(MailKeepAlphabet::ALPHABET, b"Y4XK0N8AR3G6JM2VT9BS5WC1DPH7EUZF");
+    }
 }
