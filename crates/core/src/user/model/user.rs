@@ -6,16 +6,16 @@ use argon2::{
 };
 use chrono::{DateTime, Utc};
 use derive_builder::Builder;
-use mk_utils::{define_token_prefix, token::Token};
 
 use crate::{
     Error,
+    token::{MailKeepAlphabet, Token, define_token_prefix},
     types::{Capabilities, Capability, EmailAddress},
 };
 
 define_token_prefix!(UserTokenPrefix, "U_");
 pub type UserId = u64;
-pub type UserToken = Token<UserTokenPrefix, UserId, { i64::MAX as u128 }>;
+pub type UserToken = Token<UserTokenPrefix, UserId, MailKeepAlphabet, { i64::MAX as u128 }>;
 
 #[derive(Debug, Clone, Builder)]
 pub struct User {

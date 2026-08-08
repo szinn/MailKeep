@@ -1,12 +1,14 @@
 use chrono::{DateTime, Utc};
 use derive_builder::Builder;
-use mk_utils::{define_token_prefix, token::Token};
 
-use crate::account::AccountId;
+use crate::{
+    account::AccountId,
+    token::{MailKeepAlphabet, Token, define_token_prefix},
+};
 
 define_token_prefix!(FolderTokenPrefix, "F_");
 pub type FolderId = u64;
-pub type FolderToken = Token<FolderTokenPrefix, FolderId, { i64::MAX as u128 }>;
+pub type FolderToken = Token<FolderTokenPrefix, FolderId, MailKeepAlphabet, { i64::MAX as u128 }>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Builder)]
 pub struct Folder {

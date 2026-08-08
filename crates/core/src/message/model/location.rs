@@ -1,15 +1,15 @@
 use chrono::{DateTime, Utc};
 use derive_builder::Builder;
-use mk_utils::{define_token_prefix, token::Token};
 
 use crate::{
     folder::FolderId,
     message::{MessageFlags, MessageId},
+    token::{MailKeepAlphabet, Token, define_token_prefix},
 };
 
 define_token_prefix!(MessageLocationTokenPrefix, "ML_");
 pub type MessageLocationId = u64;
-pub type MessageLocationToken = Token<MessageLocationTokenPrefix, MessageLocationId, { i64::MAX as u128 }>;
+pub type MessageLocationToken = Token<MessageLocationTokenPrefix, MessageLocationId, MailKeepAlphabet, { i64::MAX as u128 }>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Builder)]
 pub struct MessageLocation {

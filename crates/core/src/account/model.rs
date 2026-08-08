@@ -1,12 +1,17 @@
 use chrono::{DateTime, Utc};
 use derive_builder::Builder;
-use mk_utils::{define_token_prefix, token::Token};
 
-use crate::{crypto::Ciphertext, imap::ImapServerConfig, types::EmailAddress, user::UserId};
+use crate::{
+    crypto::Ciphertext,
+    imap::ImapServerConfig,
+    token::{MailKeepAlphabet, Token, define_token_prefix},
+    types::EmailAddress,
+    user::UserId,
+};
 
 define_token_prefix!(AccountTokenPrefix, "A_");
 pub type AccountId = u64;
-pub type AccountToken = Token<AccountTokenPrefix, AccountId, { i64::MAX as u128 }>;
+pub type AccountToken = Token<AccountTokenPrefix, AccountId, MailKeepAlphabet, { i64::MAX as u128 }>;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum AccountStatus {

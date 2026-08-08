@@ -1,16 +1,16 @@
 use chrono::{DateTime, Utc};
 use derive_builder::Builder;
-use mk_utils::{define_token_prefix, token::Token};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     account::AccountId,
+    token::{MailKeepAlphabet, Token, define_token_prefix},
     types::{ContentHash, EmailAddress},
 };
 
 define_token_prefix!(MessageTokenPrefix, "M_");
 pub type MessageId = u64;
-pub type MessageToken = Token<MessageTokenPrefix, MessageId, { i64::MAX as u128 }>;
+pub type MessageToken = Token<MessageTokenPrefix, MessageId, MailKeepAlphabet, { i64::MAX as u128 }>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NamedAddress {

@@ -1,12 +1,16 @@
 use chrono::{DateTime, Utc};
 use derive_builder::Builder;
-use mk_utils::{define_token_prefix, token::Token};
 
-use crate::{account::AccountId, message::MessageId, types::ContentHash};
+use crate::{
+    account::AccountId,
+    message::MessageId,
+    token::{MailKeepAlphabet, Token, define_token_prefix},
+    types::ContentHash,
+};
 
 define_token_prefix!(MessageAttachmentTokenPrefix, "MA_");
 pub type MessageAttachmentId = u64;
-pub type MessageAttachmentToken = Token<MessageAttachmentTokenPrefix, MessageAttachmentId, { i64::MAX as u128 }>;
+pub type MessageAttachmentToken = Token<MessageAttachmentTokenPrefix, MessageAttachmentId, MailKeepAlphabet, { i64::MAX as u128 }>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Builder)]
 pub struct MessageAttachment {
