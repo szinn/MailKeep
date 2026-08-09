@@ -147,7 +147,7 @@ sea-orm-migration = { version = "=2.0.0", features = [
 sqlx = "0.9.0"
 
 # CLI
-clap = { version = "4.6.5", features = ["cargo", "derive", "env"] }
+clap = { version = "4.6.6", features = ["cargo", "derive", "env"] }
 rpassword = "7.5.4"
 
 # Testing
