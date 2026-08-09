@@ -75,7 +75,7 @@ tokio-rustls = { version = "0.26.4", default-features = false, features = [
 webpki-roots = "1.0.9"
 
 # Async
-async-trait = "0.1.91"
+async-trait = "0.1.92"
 tokio = { version = "1.53.1", default-features = false, features = ["full"] }
 tokio-graceful-shutdown = "0.20.0"
 tokio-util = "0.7.19"
