@@ -4435,7 +4435,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
- "axum_session 0.20.1",
+ "axum_session 0.21.0",
  "axum_session_auth",
  "chrono",
  "clap",
