@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.12](https://github.com/szinn/MailKeep/compare/v0.1.11..v0.1.12) - 2026-08-23
+
+### Refactor
+
+- _(core)_ Remove mk-utils now that token has moved to alderkit-token - ([acdf3e5](https://github.com/szinn/MailKeep/commit/acdf3e539d71705536995d41c1cde266c36b085b))
+- _(core)_ Route domain token declarations through crate::token - ([ca35b48](https://github.com/szinn/MailKeep/commit/ca35b48ce4a597b96b6fbc5ebbde7cd89771a827))
+- _(core)_ Add alderkit-token dependency and core::token module - ([d6308a3](https://github.com/szinn/MailKeep/commit/d6308a3079a39e85628c6386a53767395c69d7d2))
+
+### Testing
+
+- _(core)_ Assert MailKeepAlphabet bytes exhaustively, not just two encoded samples - ([5e2159c](https://github.com/szinn/MailKeep/commit/5e2159c6097e22c3c2f228e143e9f648fcb4e6b8))
+
+### Miscellaneous Tasks
+
+- _(core)_ Fix deprecated clippy lint key name - ([f24981f](https://github.com/szinn/MailKeep/commit/f24981fdc2be892527115a75213628819c1500a4))
+
 ## [0.1.11](https://github.com/szinn/MailKeep/compare/v0.1.9..v0.1.11) - 2026-08-02
 
 ### Features
