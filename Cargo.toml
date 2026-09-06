@@ -12,8 +12,6 @@ members = [
 version = "0.1.12"
 edition = "2024"
 rust-version = "1.95"
-description = "Archive Your IMAP Email"
-readme = "README.md"
 repository = "https://github.com/szinn/MailKeep"
 license = "MIT"
 
