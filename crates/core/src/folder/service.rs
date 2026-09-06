@@ -216,7 +216,7 @@ mod tests {
 
         let svc = setup_with_folder_repo(repo);
         let folders = svc.list_folders(42).await.unwrap();
-        assert!(folders.is_empty());
+        assert_eq!(folders, []);
     }
 
     #[tokio::test]

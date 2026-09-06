@@ -89,8 +89,9 @@ impl AuthService for AuthServiceImpl {
             Some(user) if user.check_password(&password) => Ok(Some(user)),
             Some(_) => Ok(None),
             None => {
-                // Delay when the user isn't found to normalise response time and
-                // prevent username enumeration via timing attacks.
+                // Delay when the user isn't found to normalise response time
+                // and prevent username enumeration via timing
+                // attacks.
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 Ok(None)
             }
@@ -314,7 +315,7 @@ mod tests {
         let result = svc.delete_by_expiry().await;
 
         assert!(result.is_ok());
-        assert!(result.unwrap().is_empty());
+        assert_eq!(result.unwrap(), Vec::<String>::new());
     }
 
     // ─── delete_all ──────────────────────────────────────────────────────────
@@ -372,7 +373,7 @@ mod tests {
         let result = svc.get_ids().await;
 
         assert!(result.is_ok());
-        assert!(result.unwrap().is_empty());
+        assert_eq!(result.unwrap(), Vec::<String>::new());
     }
 
     // ─── is_valid_login ──────────────────────────────────────────────────────

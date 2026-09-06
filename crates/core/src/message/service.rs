@@ -68,8 +68,9 @@ impl MessageService for MessageServiceImpl {
     ) -> Result<RecordedMessage, Error> {
         with_transaction!(self, message_repository, message_location_repository, message_attachment_repository, |tx| {
             // Identity is the raw-content hash: identical bytes are the same
-            // archived message (dedup), even if the Message-ID differs; distinct
-            // bytes are distinct messages even when the Message-ID matches.
+            // archived message (dedup), even if the Message-ID differs;
+            // distinct bytes are distinct messages even when the
+            // Message-ID matches.
             let existing = message_repository.find_by_account_and_content_hash(tx, account_id, parsed.content_hash).await?;
 
             let (message_id, created) = if let Some(existing) = existing {
@@ -443,9 +444,10 @@ mod tests {
 
     #[tokio::test]
     async fn record_parsed_message_same_msgid_different_content_archives_both() {
-        // A second email shares an existing Message-ID but has different raw bytes.
-        // Identity is the content hash, so the lookup misses and the message is
-        // archived as a distinct row rather than rejected as a conflict.
+        // A second email shares an existing Message-ID but has different raw
+        // bytes. Identity is the content hash, so the lookup misses and
+        // the message is archived as a distinct row rather than
+        // rejected as a conflict.
         let mut message_repo = MockMessageRepository::new();
         let mut location_repo = MockMessageLocationRepository::new();
         let mut attachment_repo = MockMessageAttachmentRepository::new();
@@ -479,14 +481,15 @@ mod tests {
 
     #[tokio::test]
     async fn record_parsed_message_two_folders_share_message() {
-        // First call: fresh insert into folder A. Second call: same parsed message
-        // but folder B — finds existing, upserts a new location, no create/create_many.
+        // First call: fresh insert into folder A. Second call: same parsed
+        // message but folder B — finds existing, upserts a new
+        // location, no create/create_many.
         let mut message_repo = MockMessageRepository::new();
         let mut location_repo = MockMessageLocationRepository::new();
         let mut attachment_repo = MockMessageAttachmentRepository::new();
 
-        // First call returns None (no existing), second call returns Some(existing with
-        // id=55).
+        // First call returns None (no existing), second call returns
+        // Some(existing with id=55).
         let hash = sample_content_hash();
         let mut call_count = 0;
         message_repo.expect_find_by_account_and_content_hash().times(2).returning(move |_, _, _| {
@@ -505,7 +508,8 @@ mod tests {
             .expect_create()
             .times(1)
             .returning(|_, row| Box::pin(async move { Ok(make_message(55, row)) }));
-        // create_many called exactly once with empty rows (no attachments in sample).
+        // create_many called exactly once with empty rows (no attachments in
+        // sample).
         attachment_repo
             .expect_create_many()
             .withf(|_, rows: &Vec<NewMessageAttachmentRow>| rows.is_empty())
@@ -537,9 +541,9 @@ mod tests {
     #[tokio::test]
     async fn record_parsed_message_concurrent_insert_dedups_to_winner() {
         // Two workers insert the same content concurrently. The loser hits the
-        // (account_id, content_hash) unique constraint; the service re-fetches the
-        // winner and dedups to it (created=false), recording only the location —
-        // it does not fail or re-create attachments.
+        // (account_id, content_hash) unique constraint; the service re-fetches
+        // the winner and dedups to it (created=false), recording only
+        // the location — it does not fail or re-create attachments.
         let mut message_repo = MockMessageRepository::new();
         let mut location_repo = MockMessageLocationRepository::new();
         let attachment_repo = MockMessageAttachmentRepository::new();
@@ -620,7 +624,7 @@ mod tests {
 
         let svc = setup_message_service(message_repo, MockMessageLocationRepository::new(), MockMessageAttachmentRepository::new());
         let messages = svc.list_messages_for_account(1, 50, 10).await.unwrap();
-        assert!(messages.is_empty());
+        assert_eq!(messages, []);
     }
 
     #[tokio::test]
@@ -634,7 +638,7 @@ mod tests {
 
         let svc = setup_message_service(message_repo, MockMessageLocationRepository::new(), MockMessageAttachmentRepository::new());
         let out = svc.get_messages_by_ids(7, &[10, 20]).await.unwrap();
-        assert!(out.is_empty());
+        assert_eq!(out, []);
     }
 
     #[tokio::test]
@@ -664,7 +668,7 @@ mod tests {
         let out = svc.get_message_with_attachments(7, MessageToken::new(42)).await.unwrap();
         let (message, attachments) = out.expect("owner sees the message");
         assert_eq!(message.id, 42);
-        assert!(attachments.is_empty());
+        assert_eq!(attachments, []);
     }
 
     #[tokio::test]

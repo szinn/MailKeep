@@ -308,10 +308,11 @@ async fn no_new_mail_scan_advances_last_synced_at() {
     let account_id = make_account(&ctx, user.id, gm.server()).await;
     let inbox = make_inbox(&ctx, account_id, false).await;
 
-    // Pretend the folder was already fully synced an hour ago: cursor at the one
-    // existing message (UID 1) with the server's UIDVALIDITY. Starting from this
-    // cursor, the next scan finds nothing new (`from` = 2 > `upper` = 1) and takes
-    // the no-new-mail early-return path — exactly the path the fix must stamp.
+    // Pretend the folder was already fully synced an hour ago: cursor at the
+    // one existing message (UID 1) with the server's UIDVALIDITY. Starting
+    // from this cursor, the next scan finds nothing new (`from` = 2 >
+    // `upper` = 1) and takes the no-new-mail early-return path — exactly
+    // the path the fix must stamp.
     let stale_at = Utc::now() - chrono::Duration::hours(1);
     ctx.services
         .folder_service
@@ -326,8 +327,8 @@ async fn no_new_mail_scan_advances_last_synced_at() {
     // Start from the persisted cursor so the first pass finds no new mail.
     adapter.start_account(account_id, params_for(gm.server(), &[&synced])).await.unwrap();
 
-    // Nothing new is fetched, yet a successful scan must refresh last_synced_at to
-    // (approximately) now — well past the hour-ago stale value.
+    // Nothing new is fetched, yet a successful scan must refresh last_synced_at
+    // to (approximately) now — well past the hour-ago stale value.
     let deadline = tokio::time::Instant::now() + ACCOUNT_TIMEOUT;
     loop {
         let current = folder_row(&ctx.repos, account_id, inbox.id).await.last_synced_at;
@@ -410,11 +411,13 @@ async fn idle_ingests_new_message_promptly() {
     let inbox = make_inbox(&ctx, account_id, true).await;
     let core = run_core(&ctx);
 
-    // Poll interval far beyond the assertion window: only IDLE can catch new mail.
+    // Poll interval far beyond the assertion window: only IDLE can catch new
+    // mail.
     let adapter = make_adapter(&ctx, Duration::from_hours(1));
     adapter.start_account(account_id, params_for(gm.server(), &[&inbox])).await.unwrap();
 
-    // Wait for the engine to reach Idle (initial catch-up done, parked in IDLE).
+    // Wait for the engine to reach Idle (initial catch-up done, parked in
+    // IDLE).
     wait_for_status(&adapter, account_id, ACCOUNT_TIMEOUT, "reach Idle", |s| s.state == SyncState::Idle).await;
     assert_eq!(message_count(&ctx.repos, account_id).await, 0, "no mail yet");
 
@@ -503,7 +506,8 @@ async fn uidvalidity_rollover_drops_locations_and_reingests() {
     assert_eq!(poisoned.uidvalidity, Some(stale_uidvalidity), "stale uidvalidity recorded");
 
     // Restart with the poisoned cursor. On the next SELECT the engine sees
-    // server_uidvalidity (real) != recorded (stale) → rollover cleanup + re-fetch.
+    // server_uidvalidity (real) != recorded (stale) → rollover cleanup +
+    // re-fetch.
     let restart_folder = FolderConfig {
         id: archive.id,
         path: archive.path.clone(),
@@ -540,7 +544,8 @@ async fn uidvalidity_rollover_drops_locations_and_reingests() {
     }
 
     // Re-ingest completed: every message is re-located in the folder (the stale
-    // locations were dropped by `delete_locations_for_folder`, then re-created).
+    // locations were dropped by `delete_locations_for_folder`, then
+    // re-created).
     let deadline = tokio::time::Instant::now() + ACCOUNT_TIMEOUT;
     loop {
         let msgs = list_messages(&ctx.repos, account_id).await;
@@ -558,8 +563,9 @@ async fn uidvalidity_rollover_drops_locations_and_reingests() {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 
-    // Message rows are PRESERVED across rollover (same content dedups to the same
-    // rows — only locations were dropped and re-created, never the messages).
+    // Message rows are PRESERVED across rollover (same content dedups to the
+    // same rows — only locations were dropped and re-created, never the
+    // messages).
     let msgs_after = list_messages(&ctx.repos, account_id).await;
     let ids_after: std::collections::HashSet<MessageId> = msgs_after.iter().map(|m| m.id).collect();
     assert_eq!(ids_after, ids_before, "Message rows must be preserved across UIDVALIDITY rollover");
@@ -649,8 +655,9 @@ async fn bad_credentials_surface_failure_signal() {
     };
     adapter.start_account(account_id, bad).await.unwrap();
 
-    // The first failed pass records a `last_error` and the state is no longer the
-    // healthy `Idle` (it is Connecting/Error during the retry/backoff cycle).
+    // The first failed pass records a `last_error` and the state is no longer
+    // the healthy `Idle` (it is Connecting/Error during the retry/backoff
+    // cycle).
     let status = wait_for_status(&adapter, account_id, Duration::from_secs(20), "first failure recorded", |s| {
         s.last_error.is_some() && s.state != SyncState::Idle
     })

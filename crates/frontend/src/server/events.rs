@@ -51,7 +51,8 @@ fn account_event_stream(rx: Receiver<AppEvent>) -> impl Stream<Item = Result<Eve
             Ok(AppEvent::AccountsChanged) | Err(RecvError::Lagged(_)) => {}
             Err(RecvError::Closed) => return None,
         }
-        // Debounce: swallow further events for the fixed window, then emit once.
+        // Debounce: swallow further events for the fixed window, then emit
+        // once.
         drain_window(&mut rx, DEBOUNCE).await;
         let event = Event::default().event("accounts_changed").data("updated");
         Some((Ok(event), rx))

@@ -164,11 +164,12 @@ enum Route {
 
 #[component]
 fn MailKeepFrontend() -> Element {
-    // Anti-flash dark-mode script. Lives at the document root (which renders once)
-    // rather than in `AppLayout` (which re-renders on every navigation) — a
-    // `document::Script` cannot be updated after creation, so re-emitting it on
-    // navigation triggers the dioxus-document "changing props is not supported"
-    // warning. It runs before paint to apply the dark class and avoid a flash.
+    // Anti-flash dark-mode script. Lives at the document root (which renders
+    // once) rather than in `AppLayout` (which re-renders on every
+    // navigation) — a `document::Script` cannot be updated after creation,
+    // so re-emitting it on navigation triggers the dioxus-document
+    // "changing props is not supported" warning. It runs before paint to
+    // apply the dark class and avoid a flash.
     const ANTI_FLASH_SCRIPT: &str = "(function(){var t=localStorage.getItem('mk_theme');var \
                                      dark=t==='dark'||((!t||t==='system')&&window.matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.\
                                      classList.toggle('dark',dark);})();";

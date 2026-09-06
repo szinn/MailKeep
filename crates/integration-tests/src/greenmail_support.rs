@@ -78,8 +78,8 @@ impl Greenmail {
             port,
         };
 
-        // greenmail's JVM binds the IMAPS port a few seconds after the container
-        // starts; poll a control login until it answers.
+        // greenmail's JVM binds the IMAPS port a few seconds after the
+        // container starts; poll a control login until it answers.
         for attempt in 0..60 {
             match Control::connect(&gm).await {
                 Ok(mut control) => {

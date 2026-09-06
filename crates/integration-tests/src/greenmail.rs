@@ -58,9 +58,10 @@ impl Greenmail {
         let server = ImapServerConfig { host, port, tls: TlsMode::Tls };
         let adapter = insecure_adapter();
 
-        // greenmail's JVM binds the IMAPS port a few seconds after the container
-        // starts. Poll the probe until it answers; retry only on connection
-        // (Infrastructure) errors so a genuine auth/config problem fails fast.
+        // greenmail's JVM binds the IMAPS port a few seconds after the
+        // container starts. Poll the probe until it answers; retry only
+        // on connection (Infrastructure) errors so a genuine
+        // auth/config problem fails fast.
         for attempt in 0..60 {
             match adapter.test_connection(&server, &creds(PASSWORD)).await {
                 Ok(()) => break,
@@ -93,9 +94,9 @@ fn insecure_adapter() -> ImapAdapter {
         .dangerous()
         .with_custom_certificate_verifier(Arc::new(danger::NoVerify))
         .with_no_client_auth();
-    // Task 2: the harness only exercises connectivity/LIST, so nop sync services
-    // suffice. MK-7 Task 7 will switch to `with_tls_config` with real services
-    // for end-to-end sync assertions.
+    // Task 2: the harness only exercises connectivity/LIST, so nop sync
+    // services suffice. MK-7 Task 7 will switch to `with_tls_config` with
+    // real services for end-to-end sync assertions.
     ImapAdapter::probe_with_tls_config(Arc::new(config))
 }
 

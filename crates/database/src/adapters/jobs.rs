@@ -148,7 +148,8 @@ impl JobRepository for JobRepositoryAdapter {
         let now = Utc::now();
 
         if job.attempt < job.max_attempts {
-            // Reschedule with exponential backoff: 30s * 2^attempt (shift capped at 20).
+            // Reschedule with exponential backoff: 30s * 2^attempt (shift
+            // capped at 20).
             let backoff_secs = 30_i64 * (1_i64 << i64::from(std::cmp::Ord::min(job.attempt, 20)));
             let scheduled_at = now + chrono::Duration::seconds(backoff_secs);
 
@@ -303,7 +304,8 @@ mod tests {
         create_repository_service(db).await.unwrap()
     }
 
-    // ─── enqueue_raw ──────────────────────────────────────────────────────────
+    // ─── enqueue_raw
+    // ──────────────────────────────────────────────────────────
 
     #[tokio::test]
     async fn test_enqueue_creates_pending_job() {
@@ -340,7 +342,8 @@ mod tests {
         assert!(claimed.is_none(), "delayed job should not be claimable until its scheduled_at");
     }
 
-    // ─── claim_next ───────────────────────────────────────────────────────────
+    // ─── claim_next
+    // ───────────────────────────────────────────────────────────
 
     #[tokio::test]
     async fn test_claim_next_returns_none_when_empty() {
@@ -410,7 +413,8 @@ mod tests {
         let _ = job;
     }
 
-    // ─── complete ─────────────────────────────────────────────────────────────
+    // ─── complete
+    // ─────────────────────────────────────────────────────────────
 
     #[tokio::test]
     async fn version_bumps_at_each_step() {
@@ -476,8 +480,8 @@ mod tests {
         svc.job_repository().enqueue_raw(&*tx, "test_job", serde_json::json!({}), 0).await.unwrap();
         let claimed = svc.job_repository().claim_next(&*tx).await.unwrap().unwrap();
 
-        // attempt=1, max_attempts=3 — retries remain, but fail_terminal marks Failed
-        // anyway
+        // attempt=1, max_attempts=3 — retries remain, but fail_terminal marks
+        // Failed anyway
         assert!(claimed.attempt < claimed.max_attempts, "precondition: retries should remain");
 
         let failed = svc
@@ -507,7 +511,8 @@ mod tests {
         assert_eq!(failed.error_message.as_deref(), Some("fatal error"));
     }
 
-    // ─── reset_running_to_pending ─────────────────────────────────────────────
+    // ─── reset_running_to_pending
+    // ─────────────────────────────────────────────
 
     #[tokio::test]
     async fn test_reset_running_to_pending_returns_count() {
@@ -529,7 +534,8 @@ mod tests {
         assert!(reclaimed.is_some());
     }
 
-    // ─── count_pending_by_type ────────────────────────────────────────────────
+    // ─── count_pending_by_type
+    // ────────────────────────────────────────────────
 
     #[tokio::test]
     async fn test_count_pending_by_type_counts_pending_and_running() {
@@ -551,7 +557,8 @@ mod tests {
         assert_eq!(count_b, 1); // 1 pending
     }
 
-    // ─── count_all_pending ────────────────────────────────────────────────────
+    // ─── count_all_pending
+    // ────────────────────────────────────────────────────
 
     #[tokio::test]
     async fn test_count_all_pending_counts_pending_and_running() {
@@ -572,7 +579,8 @@ mod tests {
         assert_eq!(count, 2); // pending + running, not completed
     }
 
-    // ─── delete_old_jobs ──────────────────────────────────────────────────────
+    // ─── delete_old_jobs
+    // ──────────────────────────────────────────────────────
 
     #[tokio::test]
     async fn test_delete_old_jobs_deletes_completed_before_cutoff() {

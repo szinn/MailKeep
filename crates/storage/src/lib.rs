@@ -211,8 +211,9 @@ mod tests {
         let plaintext = b"private to A";
         let hash = storage.raw_storage_service.put_if_absent(ACCOUNT_A, plaintext).await.unwrap();
 
-        // Per-account sharding: B looks under raw/<B>/... — that subtree doesn't
-        // exist, so this is a NotFound, not a decrypt attempt with wrong AAD.
+        // Per-account sharding: B looks under raw/<B>/... — that subtree
+        // doesn't exist, so this is a NotFound, not a decrypt attempt
+        // with wrong AAD.
         let err = storage.raw_storage_service.get(ACCOUNT_B, &hash).await.unwrap_err();
         assert!(matches!(err, Error::BlobNotFound { .. }));
     }

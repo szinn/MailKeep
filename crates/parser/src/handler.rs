@@ -219,6 +219,6 @@ mod tests {
         assert_eq!(*uidvalidity, 1000);
         assert_eq!(parsed.rfc822_message_id, "<m1@example.com>");
         assert_eq!(parsed.from_address.as_str(), "alice@example.com");
-        assert!(parsed.attachments.is_empty());
+        assert_eq!(parsed.attachments, [] as [mk_core::message::ParsedAttachment; 0]);
     }
 }

@@ -271,7 +271,8 @@ mod tests {
         let tx = svc.repository().begin().await.unwrap();
 
         let inserted = svc.account_repository().insert(&*tx, new_account(user_id, "example.com")).await.unwrap();
-        // before_save in ActiveModelBehavior bumps the written 0 to 1 on insert.
+        // before_save in ActiveModelBehavior bumps the written 0 to 1 on
+        // insert.
         assert_eq!(inserted.version, 1);
         assert!(inserted.id > 0);
         assert_eq!(inserted.user_id, user_id);

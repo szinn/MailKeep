@@ -261,7 +261,7 @@ mod tests {
         let parsed = parse_eml(hash(), raw).unwrap();
         assert_eq!(parsed.attachments.len(), 1);
         assert!(parsed.attachments[0].filename.is_some());
-        assert!(!parsed.attachments[0].bytes.is_empty());
+        assert_ne!(parsed.attachments[0].bytes, [] as [u8; 0]);
     }
 
     #[test]

@@ -20,8 +20,9 @@ use crate::commands::{ImapArgs, TlsArg};
 pub async fn run(args: ImapArgs) -> anyhow::Result<()> {
     if args.verbose {
         // Surface the adapter's `IMAP LIST entry` debug spans on stderr so the
-        // raw server-reported folders/attributes are visible (keeps stdout = the
-        // folder list). Ignore the error if a subscriber is already installed.
+        // raw server-reported folders/attributes are visible (keeps stdout =
+        // the folder list). Ignore the error if a subscriber is already
+        // installed.
         let _ = tracing_subscriber::fmt()
             .with_env_filter(tracing_subscriber::EnvFilter::new("mk_imap=debug"))
             .with_writer(std::io::stderr)
@@ -53,8 +54,8 @@ pub async fn run(args: ImapArgs) -> anyhow::Result<()> {
     };
 
     // Diagnostic path: call the port's folder-listing directly. The full
-    // `ImapAccountService` now requires account/folder/cipher services that this
-    // database-free command does not have.
+    // `ImapAccountService` now requires account/folder/cipher services that
+    // this database-free command does not have.
     let imap_port: Arc<dyn ImapPort> = Arc::new(mk_imap::ImapAdapter::probe());
 
     let folders = match imap_port.list_folders(&server, &credentials).await {

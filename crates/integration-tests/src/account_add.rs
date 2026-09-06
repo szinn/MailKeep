@@ -117,7 +117,8 @@ async fn account_add_flow_ingests_inbox() {
 
     let core = run_core(&ctx);
 
-    // ── 1. create_account (same params the server fn builds) ──────────────────
+    // ── 1. create_account (same params the server fn builds)
+    // ──────────────────
     let account = ctx
         .services
         .account_service
@@ -132,7 +133,8 @@ async fn account_add_flow_ingests_inbox() {
         .await
         .unwrap();
 
-    // ── 2. create_folders_for_account (INBOX only) ────────────────────────────
+    // ── 2. create_folders_for_account (INBOX only)
+    // ────────────────────────────
     ctx.services
         .folder_service
         .create_folders_for_account(
@@ -147,8 +149,9 @@ async fn account_add_flow_ingests_inbox() {
         .await
         .unwrap();
 
-    // ── 3. start_account → first sync ─────────────────────────────────────────
-    // This is the real orchestration call: it loads the enabled account,
+    // ── 3. start_account → first sync
+    // ───────────────────────────────────────── This is the real
+    // orchestration call: it loads the enabled account,
     // decrypts credentials, builds params from enabled folders, and drives the
     // (greenmail-trusting) ImapAdapter built by the factory above.
     ctx.services.imap_account_service.start_account(account.id).await.unwrap();

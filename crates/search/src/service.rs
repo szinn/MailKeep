@@ -268,7 +268,8 @@ fn resolve_scope(accounts: &[Account], hints: &[AccountHint]) -> HashSet<Account
             }
         } else {
             // Intersect scope with the single resolved id. An unknown name (or
-            // one owned by another user) resolves to None and empties the scope.
+            // one owned by another user) resolves to None and empties the
+            // scope.
             match resolved {
                 Some(id) if scope.contains(&id) => scope = HashSet::from([id]),
                 _ => scope.clear(),
@@ -283,7 +284,8 @@ impl SearchService for TantivySearchService {
     async fn search(&self, user_id: UserId, query: &str, limit: u32, offset: u32) -> Result<SearchResults, Error> {
         let (account_hints, folder_hints, residual) = split_clauses(parse(query).clauses);
 
-        // ---- DB phase 1: resolve account scope + folder ids (one read txn) ----
+        // ---- DB phase 1: resolve account scope + folder ids (one read txn)
+        // ----
         let account_repo = self.repository_service.account_repository().clone();
         let folder_repo = self.repository_service.folder_repository().clone();
         let repo = self.repository_service.repository().clone();
@@ -306,8 +308,9 @@ impl SearchService for TantivySearchService {
                 let folder_constraints: Vec<(bool, Vec<FolderId>)> = folder_hints
                     .iter()
                     .map(|(negated, name)| {
-                        // Case-insensitive substring match on the folder path or
-                        // display name, so `folder:photography` resolves a nested
+                        // Case-insensitive substring match on the folder path
+                        // or display name, so
+                        // `folder:photography` resolves a nested
                         // folder like `Hobbies/Photography`.
                         let needle = name.to_lowercase();
                         let ids: Vec<FolderId> = scoped_folders
@@ -333,10 +336,11 @@ impl SearchService for TantivySearchService {
         }
 
         // ---- Folder-only fast path ----
-        // A query with folder hints and NO full-text / date / attachment terms is
-        // a metadata listing, not a search. Serve it straight from the DB so it
-        // paginates the WHOLE folder correctly. The Tantivy `folder:` post-filter
-        // only sees a bounded, recency-ordered window, so a folder whose messages
+        // A query with folder hints and NO full-text / date / attachment terms
+        // is a metadata listing, not a search. Serve it straight from
+        // the DB so it paginates the WHOLE folder correctly. The
+        // Tantivy `folder:` post-filter only sees a bounded,
+        // recency-ordered window, so a folder whose messages
         // fall outside that window would return nothing.
         if residual.is_empty() && !folder_constraints.is_empty() {
             let mut include_groups: Vec<Vec<FolderId>> = Vec::new();
@@ -345,8 +349,8 @@ impl SearchService for TantivySearchService {
                 if *negated {
                     exclude.extend(ids.iter().copied());
                 } else if ids.is_empty() {
-                    // A required folder hint that matched no real folder can never
-                    // be satisfied → no results.
+                    // A required folder hint that matched no real folder can
+                    // never be satisfied → no results.
                     return Ok(SearchResults { total: 0, hits: Vec::new() });
                 } else {
                     include_groups.push(ids.clone());
@@ -394,11 +398,12 @@ impl SearchService for TantivySearchService {
             );
         }
 
-        // One pass: the tuple collector yields the total count and the page from
-        // a single search rather than executing the query twice. Results are
-        // ordered by recency (`sent_date` descending). Undated messages have no
-        // value for the fast field; Tantivy's `Desc` treats a missing value as
-        // lowest, so they sort last — matching the account list's nulls-last.
+        // One pass: the tuple collector yields the total count and the page
+        // from a single search rather than executing the query twice.
+        // Results are ordered by recency (`sent_date` descending).
+        // Undated messages have no value for the fast field; Tantivy's
+        // `Desc` treats a missing value as lowest, so they sort last —
+        // matching the account list's nulls-last.
         let (total, top): (usize, Vec<(Option<DateTime>, DocAddress)>) = searcher
             .search(
                 &tantivy_query,
@@ -673,7 +678,8 @@ mod tests {
 
         // All four match the bare term "report"; indexed out of date order so a
         // stable insertion/score order would fail. A subject vs. body match is
-        // included to prove relevance no longer drives the order — recency does.
+        // included to prove relevance no longer drives the order — recency
+        // does.
         let mut older = base_row(account, "<older@x>");
         older.subject = Some("annual report".to_string());
         older.sent_date = Some(day(2024, 1, 1));
@@ -819,8 +825,8 @@ mod tests {
         let plain = fx.service.search(user_a, "secret", 10, 0).await.unwrap();
         assert_eq!(ids(&plain), vec![a_id], "user A must not see user B's message");
 
-        // Naming B's account by display name cannot widen A's scope: it resolves
-        // to nothing within A's accounts, emptying the scope.
+        // Naming B's account by display name cannot widen A's scope: it
+        // resolves to nothing within A's accounts, emptying the scope.
         let hinted = fx.service.search(user_a, "account:\"Bob Mail\" secret", 10, 0).await.unwrap();
         assert_eq!(hinted.total, 0);
         assert!(hinted.hits.is_empty(), "cross-user account hint must leak nothing");
@@ -1000,7 +1006,7 @@ mod tests {
 
         // An offset past the end yields an empty page but the true total.
         let past = fx.service.search(user, "report", 2, 99).await.unwrap();
-        assert!(past.hits.is_empty());
+        assert_eq!(past.hits, [] as [mk_core::search::SearchHit; 0]);
         assert_eq!(past.total, 5);
     }
 

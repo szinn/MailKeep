@@ -220,7 +220,8 @@ async fn test_graceful_drain() {
                         tokio::time::sleep(Duration::from_millis(50)).await;
                     }
                     // Handler has started — request graceful shutdown now so
-                    // is_shutdown_requested() is true by the time job 1 commits.
+                    // is_shutdown_requested() is true by the time job 1
+                    // commits.
                     subsys.request_shutdown();
                     Ok(())
                 }
@@ -428,8 +429,9 @@ async fn test_crash_recovery_on_startup() {
         .id
     };
 
-    // Claim it without completing — leaves it Running, simulating crashed worker.
-    // No complete/fail afterwards — the claimed job is simply left Running.
+    // Claim it without completing — leaves it Running, simulating crashed
+    // worker. No complete/fail afterwards — the claimed job is simply left
+    // Running.
     let job_repo = ctx.repos.job_repository().clone();
     let claimed = transaction(&**ctx.repos.repository(), |tx| {
         let job_repo = job_repo.clone();

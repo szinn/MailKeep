@@ -194,7 +194,8 @@ impl ImapPort for ImapAdapter {
     }
 
     async fn start_account(&self, account_id: AccountId, params: ImapConnectionParams) -> Result<(), Error> {
-        // Restart-idempotent: tear down any existing task before spawning a new one.
+        // Restart-idempotent: tear down any existing task before spawning a new
+        // one.
         let _ = self.stop_account(account_id).await;
 
         let cancel = CancellationToken::new();
@@ -327,8 +328,9 @@ mod tests {
 
     #[test]
     fn normalize_extension_strips_backslash_and_lowercases() {
-        // Servers that don't have first-class parsing land structural flags such
-        // as \HasChildren in Extension; ensure they normalize for our checks.
+        // Servers that don't have first-class parsing land structural flags
+        // such as \HasChildren in Extension; ensure they normalize for
+        // our checks.
         assert_eq!(normalize_attribute(&NameAttribute::Extension(Cow::Borrowed("\\HasChildren"))), "haschildren");
         assert_eq!(
             normalize_attribute(&NameAttribute::Extension(Cow::Borrowed("\\HasNoChildren"))),
@@ -354,6 +356,6 @@ mod tests {
     #[tokio::test]
     async fn fresh_adapter_tracks_no_accounts() {
         let adapter = ImapAdapter::probe();
-        assert!(adapter.tracked_accounts().await.is_empty());
+        assert_eq!(adapter.tracked_accounts().await, [] as [u64; 0]);
     }
 }

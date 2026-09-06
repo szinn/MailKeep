@@ -406,11 +406,11 @@ mod tests {
 
         // A message not located in the queried folder is excluded.
         let none = repo.filter_message_ids_in_folders(&*tx, &[m2], &[folder_a]).await.unwrap();
-        assert!(none.is_empty());
+        assert_eq!(none, [] as [u64; 0]);
 
         // Empty inputs short-circuit to an empty vec.
-        assert!(repo.filter_message_ids_in_folders(&*tx, &[], &[folder_a]).await.unwrap().is_empty());
-        assert!(repo.filter_message_ids_in_folders(&*tx, &[m1], &[]).await.unwrap().is_empty());
+        assert_eq!(repo.filter_message_ids_in_folders(&*tx, &[], &[folder_a]).await.unwrap(), [] as [u64; 0]);
+        assert_eq!(repo.filter_message_ids_in_folders(&*tx, &[m1], &[]).await.unwrap(), [] as [u64; 0]);
     }
 
     #[tokio::test]

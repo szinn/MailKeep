@@ -347,7 +347,8 @@ mod tests {
         let dto = build_dto(&sample_message(), &[sample_attachment()], Some(rendered));
         assert_eq!(dto.subject.as_deref(), Some("Hi"));
         assert_eq!(dto.from, "Alice");
-        // `display_addr` prefers the name when present, else falls back to the address.
+        // `display_addr` prefers the name when present, else falls back to the
+        // address.
         assert_eq!(dto.to, vec!["Bob Jones".to_string(), "carol@example.com".to_string()]);
         assert_eq!(dto.cc, vec!["dan@example.com".to_string()]);
         // `sent_date` is present, so the relative-time mapping runs.
@@ -380,9 +381,10 @@ mod tests {
 
         // Emails render as an opaque light document regardless of MailKeep's
         // theme: pin the UA scheme and force a white surface with dark text via
-        // presentational body attributes (CSP-safe; a `<style>` would be blocked
-        // by `default-src 'none'`). Without this the dark app backdrop bleeds
-        // through the transparent frame behind the email's default-black text.
+        // presentational body attributes (CSP-safe; a `<style>` would be
+        // blocked by `default-src 'none'`). Without this the dark app
+        // backdrop bleeds through the transparent frame behind the
+        // email's default-black text.
         assert!(blocked.contains("<meta name=\"color-scheme\" content=\"light\">"));
         assert!(blocked.contains("bgcolor=\"#ffffff\""), "email frame must have an opaque light background");
         assert!(blocked.contains("text=\"#111827\""), "email frame must set a dark default text color");

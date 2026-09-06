@@ -210,7 +210,7 @@ mod tests {
         let svc = setup().await;
         let tx = svc.repository().begin().await.unwrap();
         let rows = svc.message_attachment_repository().list_for_message(&*tx, 9_999_999).await.unwrap();
-        assert!(rows.is_empty());
+        assert_eq!(rows, [] as [mk_core::message::MessageAttachment; 0]);
     }
 
     #[tokio::test]

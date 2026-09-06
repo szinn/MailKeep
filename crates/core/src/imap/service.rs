@@ -116,7 +116,8 @@ impl ImapAccountServiceImpl {
                 Ok(())
             }
             Err(e) => {
-                // Best-effort: record the failure; do not mask the original error.
+                // Best-effort: record the failure; do not mask the original
+                // error.
                 if self
                     .account_service
                     .set_status(account.id, AccountStatus::Error, Some(e.to_string()))
@@ -175,15 +176,16 @@ impl ImapAccountService for ImapAccountServiceImpl {
 
         use futures::stream::{self, StreamExt};
 
-        // Stop every account that is actually running. An account disabled while
-        // its sync tasks are live drops out of `list_enabled()` but remains in
-        // the adapter's tracked set, so stop the *union* of the two — not
-        // enabled-only — to guarantee no IDLE/poll task leaks past shutdown.
+        // Stop every account that is actually running. An account disabled
+        // while its sync tasks are live drops out of `list_enabled()`
+        // but remains in the adapter's tracked set, so stop the *union*
+        // of the two — not enabled-only — to guarantee no IDLE/poll
+        // task leaks past shutdown.
         //
-        // The tracked set is authoritative and reachable without the DB. stop_all
-        // runs exactly once at shutdown with no retry, so a DB failure here must
-        // NOT prevent stopping the tracked accounts: degrade to empty-enabled and
-        // still tear down the tracked set.
+        // The tracked set is authoritative and reachable without the DB.
+        // stop_all runs exactly once at shutdown with no retry, so a DB
+        // failure here must NOT prevent stopping the tracked accounts:
+        // degrade to empty-enabled and still tear down the tracked set.
         let enabled_ids = match self.account_service.list_enabled().await {
             Ok(accounts) => accounts.into_iter().map(|a| a.id).collect::<Vec<_>>(),
             Err(e) => {
@@ -457,8 +459,8 @@ mod tests {
 
         let mut accounts = MockAccountService::new();
         accounts.expect_list_enabled().times(1).return_once(move || Ok(vec![a, b]));
-        // a -> Syncing, b -> Error; order is non-deterministic under concurrency,
-        // so match on either valid (id, status) pairing.
+        // a -> Syncing, b -> Error; order is non-deterministic under
+        // concurrency, so match on either valid (id, status) pairing.
         accounts
             .expect_set_status()
             .withf(|id, status, _| (*id == 1 && *status == AccountStatus::Syncing) || (*id == 2 && *status == AccountStatus::Error))
@@ -479,8 +481,8 @@ mod tests {
     #[tokio::test]
     async fn reconcile_statuses_persists_only_changes() {
         let cipher = cipher();
-        // a: live Error, db Syncing -> persist Error. b: live Idle, db Idle -> no
-        // write.
+        // a: live Error, db Syncing -> persist Error. b: live Idle, db Idle ->
+        // no write.
         let mut a = account(1, &cipher, "pw");
         a.status = AccountStatus::Syncing;
         let mut b = account(2, &cipher, "pw");

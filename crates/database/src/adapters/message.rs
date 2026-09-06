@@ -299,8 +299,9 @@ impl MessageRepository for MessageRepositoryAdapter {
         }
         let transaction = TransactionImpl::get_db_transaction(transaction)?;
         let id_list: Vec<i64> = ids.iter().map(|id| *id as i64).collect();
-        // Bulk UPDATE bypasses the `before_save` version hook; that is fine here
-        // since `indexed` is an internal watermark, not a user-visible field.
+        // Bulk UPDATE bypasses the `before_save` version hook; that is fine
+        // here since `indexed` is an internal watermark, not a
+        // user-visible field.
         prelude::Messages::update_many()
             .col_expr(messages::Column::Indexed, Expr::value(true))
             .filter(messages::Column::Id.is_in(id_list))
@@ -438,7 +439,8 @@ mod tests {
         let account_id = make_account(&svc, user_id, "example.com").await;
         let tx = svc.repository().begin().await.unwrap();
 
-        // Two rows with identical content (new_row derives the hash from the id).
+        // Two rows with identical content (new_row derives the hash from the
+        // id).
         let row = new_row(account_id, "<dup@example.com>");
         svc.message_repository().create(&*tx, row).await.unwrap();
 
@@ -461,10 +463,11 @@ mod tests {
         // Message ids come from the row's MessageToken (not DB auto-increment),
         // so assign them explicitly to make the ordering deterministic. Ids are
         // chosen so that id order does NOT match sent_date order — id ASC would
-        // yield [newest, middle_a, middle_b, undated, oldest], which differs from
-        // the expected result below, so this test fails against `ORDER BY id ASC`.
-        // middle_a and middle_b share a date; middle_b has the higher id, so the
-        // Id DESC tie-break must place it first.
+        // yield [newest, middle_a, middle_b, undated, oldest], which differs
+        // from the expected result below, so this test fails against
+        // `ORDER BY id ASC`. middle_a and middle_b share a date;
+        // middle_b has the higher id, so the Id DESC tie-break must
+        // place it first.
         let mut newest = new_row(account_id, "<newest@example.com>");
         newest.token = MessageToken::new(100);
         newest.sent_date = Some(base + Duration::days(3));
@@ -493,13 +496,14 @@ mod tests {
         // The tie-break check relies on middle_b having the higher id.
         assert!(middle_high_id > middle_low_id);
 
-        // sent_date DESC, NULLS LAST, Id DESC tie-break for the equal (day+2) pair.
+        // sent_date DESC, NULLS LAST, Id DESC tie-break for the equal (day+2)
+        // pair.
         let all = svc.message_repository().list_for_account(&*tx, account_id, 10, 0).await.unwrap();
         let ids: Vec<_> = all.iter().map(|m| m.id).collect();
         assert_eq!(ids, vec![newest_id, middle_high_id, middle_low_id, oldest_id, undated_id]);
 
-        // Pagination applies over the same ordering (offset=1, limit=2), including
-        // the tie-break within the equal-date pair.
+        // Pagination applies over the same ordering (offset=1, limit=2),
+        // including the tie-break within the equal-date pair.
         let page = svc.message_repository().list_for_account(&*tx, account_id, 2, 1).await.unwrap();
         let page_ids: Vec<_> = page.iter().map(|m| m.id).collect();
         assert_eq!(page_ids, vec![middle_high_id, middle_low_id]);
@@ -598,7 +602,8 @@ mod tests {
             .collect();
         assert_eq!(unindexed_before, vec![m3], "only m3 remains unindexed before reset");
 
-        // Reset flips all three rows back to unindexed and reports rows affected.
+        // Reset flips all three rows back to unindexed and reports rows
+        // affected.
         let affected = svc.message_repository().reset_all_indexed(&*tx).await.unwrap();
         assert_eq!(affected, 3, "every row is reported affected");
 
@@ -629,7 +634,10 @@ mod tests {
         let b_msg = svc.message_repository().create(&*tx, new_row(bob_acct, "<b@example.com>")).await.unwrap().id;
 
         // Empty ids → empty, no query.
-        assert!(svc.message_repository().list_by_ids_for_user(&*tx, alice, &[]).await.unwrap().is_empty());
+        assert_eq!(
+            svc.message_repository().list_by_ids_for_user(&*tx, alice, &[]).await.unwrap(),
+            [] as [mk_core::message::Message; 0]
+        );
 
         // Requesting both ids as Alice returns only Alice's message.
         let got = svc.message_repository().list_by_ids_for_user(&*tx, alice, &[a_msg, b_msg]).await.unwrap();

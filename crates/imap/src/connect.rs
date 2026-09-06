@@ -88,8 +88,8 @@ async fn connect_starttls(server: &ImapServerConfig, tls_config: Arc<ClientConfi
         .await
         .map_err(|e| Error::Infrastructure(format!("IMAP STARTTLS command failed: {e}")))?;
 
-    // Recover the underlying TCP stream and upgrade it; STARTTLS does not emit a
-    // second greeting, so we do not read one here.
+    // Recover the underlying TCP stream and upgrade it; STARTTLS does not emit
+    // a second greeting, so we do not read one here.
     // MK-7: if/when we start trusting server CAPABILITY, re-issue it after the
     // TLS upgrade — the pre-STARTTLS capability list must not be trusted.
     let tcp = plain.into_inner();

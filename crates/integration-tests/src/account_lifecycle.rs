@@ -172,8 +172,8 @@ async fn disable_keeps_archive_readable() {
     let core = run_core(&ctx);
 
     // start_account goes through ImapAccountService: loads the enabled account,
-    // decrypts credentials, builds params, drives the adapter — exactly the path
-    // the MK-9 `set_account_enabled(true)` server fn exercises.
+    // decrypts credentials, builds params, drives the adapter — exactly the
+    // path the MK-9 `set_account_enabled(true)` server fn exercises.
     ctx.services.imap_account_service.start_account(account_id).await.unwrap();
 
     // Wait until the seeded message has been ingested into a DB row with
@@ -246,9 +246,9 @@ fn sample_parsed_message() -> ParsedMessage {
 #[ignore = "needs a docker/colima daemon — run via `just integration-tests`"]
 async fn delete_cascades_and_allows_recreate() {
     // Greenmail is started so both tests carry the same `#[ignore]` guard and
-    // run under `just integration-tests`.  This test does not send IMAP commands;
-    // we seed the DB + storage synthetically so it runs fast and independently
-    // of IMAP session semantics.
+    // run under `just integration-tests`.  This test does not send IMAP
+    // commands; we seed the DB + storage synthetically so it runs fast and
+    // independently of IMAP session semantics.
     let _gm = Greenmail::start().await;
 
     let ctx = setup_pipeline().await;
@@ -334,8 +334,8 @@ async fn delete_cascades_and_allows_recreate() {
 
     // ── Assert: on-disk storage dir is gone ──────────────────────────────────
     // delete_account calls raw_storage_service.delete_account, which removes
-    // <storage_root>/raw/<account_id>.  We verify via the service (which returns
-    // Ok(false) for a missing key without panicking).
+    // <storage_root>/raw/<account_id>.  We verify via the service (which
+    // returns Ok(false) for a missing key without panicking).
     let exists_after = ctx.services.raw_storage_service.exists(account_id, &content_hash).await.unwrap();
     assert!(!exists_after, "raw blob must be removed from disk after delete_account");
 

@@ -51,7 +51,8 @@ pub(crate) fn compute_completion(input: &str, cycle_idx: usize) -> String {
         return String::new();
     }
     let last_token = input.split_whitespace().last().unwrap_or("");
-    // A leading '!' negates the token; completion works on the field part after it.
+    // A leading '!' negates the token; completion works on the field part after
+    // it.
     let bare = last_token.strip_prefix('!').unwrap_or(last_token);
     if bare.is_empty() {
         return String::new();

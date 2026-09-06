@@ -222,7 +222,8 @@ async fn bare_term_matches_subject_and_body() {
 
     // A bare term matches whether it lands in the subject or the body. Results
     // are ordered by sent_date (not relevance), and both messages are archived
-    // at ~the same instant, so assert set membership rather than a specific order.
+    // at ~the same instant, so assert set membership rather than a specific
+    // order.
     let results = ctx.services.search_service.search(user.id, "running", 10, 0).await.unwrap();
     let hit_ids: HashSet<u64> = results.hits.iter().map(|h| h.message_id).collect();
     assert_eq!(
@@ -339,11 +340,12 @@ async fn stale_schema_version_triggers_full_rebuild() {
     ctx.subsystem.reindex_to_idle().await.unwrap();
     assert_eq!(read_version(&ctx.index_dir), Some(SCHEMA_VERSION), "version written after first index");
 
-    // Corrupt the sidecar to a stale version, forcing a rebuild on the next run.
+    // Corrupt the sidecar to a stale version, forcing a rebuild on the next
+    // run.
     std::fs::write(ctx.index_dir.join("schema_version"), b"0").unwrap();
 
-    // Reconcile clears the index, re-queues every row, rebuilds from the DB, and
-    // rewrites the current version.
+    // Reconcile clears the index, re-queues every row, rebuilds from the DB,
+    // and rewrites the current version.
     ctx.subsystem.reindex_to_idle().await.unwrap();
 
     let results = ctx.services.search_service.search(user.id, "rebuildable", 10, 0).await.unwrap();

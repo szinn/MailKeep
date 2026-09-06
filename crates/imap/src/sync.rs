@@ -246,7 +246,8 @@ pub(crate) async fn idle_task(
                     s.last_sync_finished_at = Some(Utc::now());
                 };
 
-                // Enter IDLE. `idle()` consumes the session; `done()` returns it.
+                // Enter IDLE. `idle()` consumes the session; `done()` returns
+                // it.
                 let mut handle = session.idle();
                 handle.init().await.map_err(|e| Error::Infrastructure(format!("IMAP IDLE init failed: {e}")))?;
 
@@ -343,9 +344,9 @@ pub(crate) async fn sync_folder(
 
     status.lock().await.state = SyncState::Syncing;
 
-    // Upper bound: nothing above `uid_next - 1` exists yet. When the server does
-    // not advertise UIDNEXT, fall back to an open-ended scan that stops on the
-    // first empty window past the high-water mark.
+    // Upper bound: nothing above `uid_next - 1` exists yet. When the server
+    // does not advertise UIDNEXT, fall back to an open-ended scan that
+    // stops on the first empty window past the high-water mark.
     let upper = mailbox.uid_next.map(|n| n.saturating_sub(1));
     let mut high = last_uid;
     let mut from = last_uid.saturating_add(1);
@@ -433,9 +434,10 @@ pub(crate) async fn sync_folder(
         );
     } else {
         tracing::debug!(account = account_label, folder = %folder.path, last_uid = high, "folder sync: no new messages");
-        // The loop fetched nothing (an open-ended scan that stopped on the first
-        // empty window), so no per-batch write ran above. Stamp the sync time so
-        // a successful no-op scan still updates `last_synced_at`.
+        // The loop fetched nothing (an open-ended scan that stopped on the
+        // first empty window), so no per-batch write ran above. Stamp
+        // the sync time so a successful no-op scan still updates
+        // `last_synced_at`.
         folders.record_sync_progress(folder.id, server_uidvalidity, high, Utc::now()).await?;
     }
     Ok((high, server_uidvalidity))
@@ -517,7 +519,7 @@ mod tests {
         assert!(mapped.draft);
         assert!(mapped.deleted);
         assert!(mapped.recent);
-        assert!(mapped.custom.is_empty());
+        assert_eq!(mapped.custom, [] as [std::string::String; 0]);
     }
 
     #[test]
@@ -529,7 +531,7 @@ mod tests {
         assert!(!mapped.draft);
         assert!(!mapped.deleted);
         assert!(!mapped.recent);
-        assert!(mapped.custom.is_empty());
+        assert_eq!(mapped.custom, [] as [std::string::String; 0]);
     }
 
     #[test]
@@ -545,7 +547,7 @@ mod tests {
         // `\*` (MayCreate) is mailbox metadata, not a per-message flag.
         let mapped = map_flags([Flag::MayCreate, Flag::Seen].into_iter());
         assert!(mapped.seen);
-        assert!(mapped.custom.is_empty());
+        assert_eq!(mapped.custom, [] as [std::string::String; 0]);
     }
 
     #[test]

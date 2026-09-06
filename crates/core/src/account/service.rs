@@ -398,7 +398,7 @@ mod tests {
         let mut repo = MockAccountRepository::new();
         repo.expect_insert().returning(|_, na| {
             assert_ne!(na.credentials.as_bytes(), b"hunter2");
-            assert!(!na.credentials.as_bytes().is_empty());
+            assert_ne!(na.credentials.as_bytes(), [] as [u8; 0]);
             let mut a = fake_existing_account(na.token.id(), na.user_id);
             a.credentials = na.credentials;
             Box::pin(async move { Ok(a) })

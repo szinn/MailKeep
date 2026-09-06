@@ -288,7 +288,8 @@ async fn callback_handler(
 
     // ── Exchange code for tokens ──────────────────────────────────────────
     // exchange_code() returns Result<CodeTokenRequest, ConfigurationError> on
-    // CoreClient with EndpointMaybeSet token URL (our DiscoveredCoreClient type).
+    // CoreClient with EndpointMaybeSet token URL (our DiscoveredCoreClient
+    // type).
     let pkce_verifier = PkceCodeVerifier::new(entry.pkce_verifier);
     let token_request = match client.client.exchange_code(AuthorizationCode::new(code.to_string())) {
         Ok(req) => req,
@@ -309,7 +310,8 @@ async fn callback_handler(
     // ── Validate ID token ─────────────────────────────────────────────────
     // TokenResponse::id_token() is provided by the openidconnect crate's
     // trait impl on StandardTokenResponse<IdTokenFields<...>, ...>.
-    // The verifier checks: signature (JWKS), audience, issuer, expiry, and nonce.
+    // The verifier checks: signature (JWKS), audience, issuer, expiry, and
+    // nonce.
     let Some(id_token) = token_response.id_token() else {
         tracing::error!("OIDC callback: ID token missing from token response");
         return failure_redirect();

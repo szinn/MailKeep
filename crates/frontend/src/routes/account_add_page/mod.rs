@@ -187,13 +187,14 @@ pub(crate) fn AccountAddPage() -> Element {
     let mut submit_error: Signal<Option<String>> = use_signal(|| None);
     let mut submitting = use_signal(|| false);
 
-    // Failure state 3: mark the picker stale whenever a connection field changes
-    // after a successful probe, so the user is prompted to re-test.
+    // Failure state 3: mark the picker stale whenever a connection field
+    // changes after a successful probe, so the user is prompted to re-test.
     use_effect(move || {
         let _ = (host(), port(), tls(), email(), password());
-        // Read `picker_shown` untracked: it is a *condition* here, not a trigger.
-        // Subscribing to it would make a successful probe (which flips it true)
-        // immediately re-run this effect and falsely mark the picker stale.
+        // Read `picker_shown` untracked: it is a *condition* here, not a
+        // trigger. Subscribing to it would make a successful probe
+        // (which flips it true) immediately re-run this effect and
+        // falsely mark the picker stale.
         if *picker_shown.peek() {
             picker_stale.set(true);
         }
@@ -205,7 +206,8 @@ pub(crate) fn AccountAddPage() -> Element {
         tls: tls(),
     };
 
-    // Failure state 2: re-run only `probe_list_folders` (connection already good).
+    // Failure state 2: re-run only `probe_list_folders` (connection already
+    // good).
     let do_list_folders = move || {
         spawn(async move {
             folder_error.set(None);

@@ -140,8 +140,8 @@ impl SearchSubsystem {
                         docs.push((msg.id, to_document(&fields, msg, &body)));
                     } else {
                         // Poison pill: bytes that will not parse can never
-                        // succeed; skip the document but mark the row so it never
-                        // re-drains.
+                        // succeed; skip the document but mark the row so it
+                        // never re-drains.
                         tracing::warn!(
                             message_id = msg.id,
                             account_id = msg.account_id,
@@ -172,7 +172,8 @@ impl SearchSubsystem {
         // ---- Write phase: delete-then-add per doc, one commit (sync). ----
         self.write_batch(docs)?;
 
-        // ---- Mark phase: flip the watermark only after the commit succeeds. ----
+        // ---- Mark phase: flip the watermark only after the commit succeeds.
+        // ----
         let count = ids.len();
         let repo = self.repository_service.repository().clone();
         let msg_repo = self.repository_service.message_repository().clone();
@@ -247,8 +248,9 @@ impl IntoSubsystem<Error> for SearchSubsystem {
         // `interval`'s first tick fires immediately, so the initial convergence
         // runs on the first loop iteration — inside the `select!`, so even a
         // first-boot full rebuild stops promptly when shutdown is requested
-        // rather than running past the graceful-shutdown timeout. `Delay` keeps a
-        // slow drain from bursting a backlog of missed ticks afterwards.
+        // rather than running past the graceful-shutdown timeout. `Delay` keeps
+        // a slow drain from bursting a backlog of missed ticks
+        // afterwards.
         let mut ticker = tokio::time::interval(POLL_INTERVAL);
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
@@ -256,9 +258,10 @@ impl IntoSubsystem<Error> for SearchSubsystem {
                 () = subsys.on_shutdown_requested() => break,
                 _ = ticker.tick() => {}
             }
-            // Converge the backlog, but abort promptly on shutdown: `drain_to_empty`
-            // only awaits inside `drain_once`, so `select!` cancels it between (or
-            // within) batches. A mid-batch cancel is safe — the delete-before-add
+            // Converge the backlog, but abort promptly on shutdown:
+            // `drain_to_empty` only awaits inside `drain_once`, so
+            // `select!` cancels it between (or within) batches. A
+            // mid-batch cancel is safe — the delete-before-add
             // write makes the re-drain idempotent.
             tokio::select! {
                 () = subsys.on_shutdown_requested() => break,
@@ -653,7 +656,7 @@ mod tests {
         let id1 = seed_message(&fx.repo, account, "epsilon", &raw1).await;
         let id2 = seed_message(&fx.repo, account, "zeta", &raw2).await;
         assert_eq!(fx.subsystem.drain_once().await.unwrap(), 2);
-        assert!(unindexed_ids(&fx.repo).await.is_empty());
+        assert_eq!(unindexed_ids(&fx.repo).await, [] as [u64; 0]);
 
         // Put a stale doc directly in the index that no longer has a DB row, to
         // prove the rebuild wipes the whole index, not just known rows.
@@ -742,8 +745,8 @@ mod tests {
         let user = make_user(&fx.repo, "alice", "alice@example.com").await;
         let account = make_account(&fx.repo, user, "Primary").await;
 
-        // Seed more than one BATCH (128) so `drain_to_empty` must loop across at
-        // least two `drain_once` passes to converge.
+        // Seed more than one BATCH (128) so `drain_to_empty` must loop across
+        // at least two `drain_once` passes to converge.
         let total = usize::try_from(BATCH).unwrap() + 2;
         for i in 0..total {
             let subject = format!("msg{i}");
@@ -787,7 +790,7 @@ mod tests {
         // Once the transient condition clears, the retry indexes it normally.
         fx.storage.clear_transient();
         assert_eq!(fx.subsystem.drain_once().await.unwrap(), 1);
-        assert!(unindexed_ids(&fx.repo).await.is_empty());
+        assert_eq!(unindexed_ids(&fx.repo).await, [] as [u64; 0]);
         assert_eq!(count_body_hits(&fx.index, fields.body, "running"), 1);
     }
 

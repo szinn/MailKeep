@@ -64,8 +64,9 @@ pub struct Fields {
 pub fn build_schema() -> (Schema, Fields) {
     let mut builder = Schema::builder();
 
-    // Stemmed-and-stored (subject) and stemmed-only (body/from/to) text options,
-    // both driven by the `en_stem` analyzer registered on the index.
+    // Stemmed-and-stored (subject) and stemmed-only (body/from/to) text
+    // options, both driven by the `en_stem` analyzer registered on the
+    // index.
     let stem_indexing = TextFieldIndexing::default()
         .set_tokenizer(EN_STEM)
         .set_index_option(IndexRecordOption::WithFreqsAndPositions);

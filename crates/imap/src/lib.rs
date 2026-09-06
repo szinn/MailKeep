@@ -20,7 +20,6 @@ pub use subsystem::{ImapSubsystem, create_imap_subsystem};
 /// `poll_interval` is baked into the closure here (per the MK-7 wiring
 /// decision) so `main.rs` stays adapter-agnostic and the value never lands on
 /// `ExternalServices`.
-#[must_use]
 pub fn create_imap_port_factory(poll_interval: Duration) -> ImapPortFactory {
     Box::new(move |ingest, folders, messages| Arc::new(ImapAdapter::new(ingest, folders, messages, poll_interval)) as Arc<dyn ImapPort>)
 }

@@ -92,16 +92,18 @@ impl SearchIndex {
 
         let (schema, fields) = build_schema();
 
-        // `Index::open_or_create` REFUSES to open an existing index whose on-disk
-        // schema differs from the one we pass (a hard `SchemaError`). So if a
-        // previous `SCHEMA_VERSION` persisted an incompatible field set, we must
-        // discard it *here*, before opening — otherwise the process can't even
-        // start. Clearing the directory lets a fresh index be created with the
+        // `Index::open_or_create` REFUSES to open an existing index whose
+        // on-disk schema differs from the one we pass (a hard
+        // `SchemaError`). So if a previous `SCHEMA_VERSION` persisted
+        // an incompatible field set, we must discard it *here*, before
+        // opening — otherwise the process can't even start. Clearing
+        // the directory lets a fresh index be created with the
         // current schema; the indexer's startup reconcile then re-queues and
-        // re-indexes every row. The index is rebuildable derived data, so wiping
-        // it is always safe. (A same-schema but stale-*version* bump is handled
-        // separately by the reconcile's `delete_all` path — the on-disk schema
-        // still matches there, so this open succeeds.)
+        // re-indexes every row. The index is rebuildable derived data, so
+        // wiping it is always safe. (A same-schema but stale-*version*
+        // bump is handled separately by the reconcile's `delete_all`
+        // path — the on-disk schema still matches there, so this open
+        // succeeds.)
         let schema_incompatible = matches!(
             MmapDirectory::open(dir).ok().and_then(|d| Index::open(d).ok()),
             Some(existing) if existing.schema() != schema
@@ -266,9 +268,10 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let first = SearchIndex::open_or_create(dir.path());
         assert!(first.is_ok(), "fresh open failed: {first:?}");
-        // The eager shared writer holds the directory's writer lock, so only one
-        // live `SearchIndex` may exist per directory. Drop the first before
-        // reopening — the realistic single-handle lifecycle.
+        // The eager shared writer holds the directory's writer lock, so only
+        // one live `SearchIndex` may exist per directory. Drop the
+        // first before reopening — the realistic single-handle
+        // lifecycle.
         drop(first);
         let second = SearchIndex::open_or_create(dir.path());
         assert!(second.is_ok(), "reopen after drop failed: {second:?}");
@@ -352,7 +355,8 @@ mod tests {
         drop(writer_handle);
         drop(si);
 
-        // Session 2: a fresh open of the same directory must see the committed doc.
+        // Session 2: a fresh open of the same directory must see the committed
+        // doc.
         let si = SearchIndex::open_or_create(dir.path()).unwrap();
         let fields = *si.fields();
         let reader = si.reader().unwrap();
@@ -378,10 +382,11 @@ mod tests {
 
         let dir = TempDir::new().unwrap();
 
-        // Simulate an index written by a previous SCHEMA_VERSION with a DIFFERENT
-        // field set. `Index::open_or_create` with the current schema would reject
-        // this on-disk schema with a hard error. Drop the writer + index to
-        // release the directory lock before reopening.
+        // Simulate an index written by a previous SCHEMA_VERSION with a
+        // DIFFERENT field set. `Index::open_or_create` with the current
+        // schema would reject this on-disk schema with a hard error.
+        // Drop the writer + index to release the directory lock before
+        // reopening.
         let mut sb = Schema::builder();
         let legacy = sb.add_text_field("legacy_only", TEXT | STORED);
         let stale = Index::create_in_dir(dir.path(), sb.build()).unwrap();
