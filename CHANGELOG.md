@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.13](https://github.com/szinn/MailKeep/compare/v0.1.12..v0.1.13) - 2026-09-18
+
+### Bug Fixes
+
+- _(core)_ Drop nonexistent argon2 std feature, migrate to 0.6.1 password-hash API - ([b7fd54f](https://github.com/szinn/MailKeep/commit/b7fd54f63397b110b5f72844f5c986bec557119b))
+- _(frontend)_ Make OIDC discovery lazy and self-healing - ([d7c4012](https://github.com/szinn/MailKeep/commit/d7c4012d8297e79089107d2715410ceea0426ab5))
+
+### Miscellaneous Tasks
+
+- _(core)_ Fix clippy::assert_is_empty and double_must_use warnings - ([e1bace6](https://github.com/szinn/MailKeep/commit/e1bace6295c7179a8e06db9f84fdd6d4a27f0e7d))
+- Remove unused workspace.package description/readme fields - ([fe09346](https://github.com/szinn/MailKeep/commit/fe093462f770bb518f91a6746a50f25b2004bb3b))
+
 ## [0.1.12](https://github.com/szinn/MailKeep/compare/v0.1.11..v0.1.12) - 2026-08-23
 
 ### Refactor
