@@ -33,6 +33,7 @@ use openidconnect::{
     core::{CoreClient, CoreProviderMetadata, CoreResponseType},
 };
 use serde::Deserialize;
+use tokio::sync::Mutex as AsyncMutex;
 
 use crate::OidcConfig;
 
@@ -197,6 +198,83 @@ impl OidcClient {
     }
 }
 
+/// How long a failed discovery attempt is cached before the next request is
+/// allowed to retry it. Keeps repeated login-page loads during an IdP outage
+/// from hammering the IdP with a discovery request each time.
+const RETRY_COOLDOWN: Duration = Duration::from_secs(30);
+
+/// Whether `OidcClientCell::ensure_client` should attempt discovery again,
+/// given the timestamp of the last failure (`None` if there hasn't been
+/// one) and the current time. Pulled out as a pure function so the cooldown
+/// logic is testable without performing real discovery.
+fn should_attempt(failed_since: Option<Instant>, now: Instant) -> bool {
+    match failed_since {
+        None => true,
+        Some(since) => now.duration_since(since) >= RETRY_COOLDOWN,
+    }
+}
+
+#[derive(Default)]
+struct CellState {
+    client: Option<Arc<OidcClient>>,
+    failed_since: Option<Instant>,
+}
+
+/// Lazily-initialized, self-healing OIDC client. Discovery is attempted the
+/// first time SSO is needed (login page render or the "sign in with SSO"
+/// button) rather than once at boot, so a transient IdP outage at startup no
+/// longer permanently disables SSO for the process's lifetime. A successful
+/// client is cached forever; a failed attempt is cached only for
+/// [`RETRY_COOLDOWN`].
+pub(crate) struct OidcClientCell {
+    config: OidcConfig,
+    base_url: String,
+    state: AsyncMutex<CellState>,
+}
+
+impl OidcClientCell {
+    pub(crate) fn new(config: OidcConfig, base_url: String) -> Self {
+        Self {
+            config,
+            base_url,
+            state: AsyncMutex::new(CellState::default()),
+        }
+    }
+
+    pub(crate) fn config(&self) -> &OidcConfig {
+        &self.config
+    }
+
+    /// Returns the cached client, or attempts discovery if there is none yet
+    /// (or the last attempt failed and the cooldown has elapsed). Holding
+    /// the lock across the discovery `.await` serializes concurrent callers
+    /// onto a single in-flight discovery attempt instead of each starting
+    /// their own.
+    pub(crate) async fn ensure_client(&self) -> Option<Arc<OidcClient>> {
+        let mut state = self.state.lock().await;
+        if let Some(client) = &state.client {
+            return Some(client.clone());
+        }
+        if !should_attempt(state.failed_since, Instant::now()) {
+            return None;
+        }
+
+        match OidcClient::new(&self.config, &self.base_url).await {
+            Ok(client) => {
+                let client = Arc::new(client);
+                state.client = Some(client.clone());
+                state.failed_since = None;
+                Some(client)
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "OIDC client init failed; SSO temporarily unavailable");
+                state.failed_since = Some(Instant::now());
+                None
+            }
+        }
+    }
+}
+
 /// Returns an axum router with the OIDC start and callback routes.
 pub(crate) fn oidc_router() -> Router {
     Router::new()
@@ -207,8 +285,11 @@ pub(crate) fn oidc_router() -> Router {
 /// Initiates the OIDC authorization code flow. Generates state, nonce, and a
 /// PKCE verifier, stores them in the server-side state store keyed by the
 /// state value, and redirects to the IdP authorization endpoint.
-async fn start_handler(Extension(client): Extension<Arc<OidcClient>>) -> axum::response::Response {
+async fn start_handler(Extension(cell): Extension<Arc<OidcClientCell>>) -> axum::response::Response {
     tracing::info!("OIDC start: handler entered");
+    let Some(client) = cell.ensure_client().await else {
+        return failure_redirect();
+    };
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
     let (auth_url, csrf_token, nonce) = client
@@ -238,12 +319,17 @@ async fn start_handler(Extension(client): Extension<Arc<OidcClient>>) -> axum::r
     reason = "OIDC validation flow is sequential — splitting hides the security-sensitive ordering"
 )]
 async fn callback_handler(
-    Extension(client): Extension<Arc<OidcClient>>,
+    Extension(cell): Extension<Arc<OidcClientCell>>,
     Extension(core_services): Extension<Arc<mk_core::CoreServices>>,
     auth_session: super::AuthSession,
     Query(query): Query<CallbackQuery>,
 ) -> axum::response::Response {
     tracing::info!("OIDC callback: received");
+
+    let Some(client) = cell.ensure_client().await else {
+        tracing::error!("OIDC callback: client unavailable");
+        return failure_redirect();
+    };
 
     // ── Extract state and look up the in-flight entry ─────────────────────
     // The lookup IS the CSRF defense: only state values we generated and
@@ -376,4 +462,39 @@ async fn callback_handler(
 
 fn failure_redirect() -> axum::response::Response {
     Redirect::to("/?login_failed=1").into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_attempt_with_no_prior_failure() {
+        assert!(should_attempt(None, Instant::now()));
+    }
+
+    #[test]
+    fn should_attempt_false_within_cooldown() {
+        let since = Instant::now();
+        assert!(!should_attempt(Some(since), since + Duration::from_secs(1)));
+    }
+
+    #[test]
+    fn should_attempt_true_after_cooldown_elapses() {
+        let since = Instant::now();
+        assert!(should_attempt(Some(since), since + RETRY_COOLDOWN));
+    }
+
+    #[tokio::test]
+    async fn ensure_client_returns_none_on_invalid_discovery_url() {
+        let config = OidcConfig {
+            discovery_url: Some("not a valid url".to_string()),
+            client_id: Some("mailkeep".to_string()),
+            client_secret: Some("secret".to_string()),
+            button_label: None,
+        };
+        let cell = OidcClientCell::new(config, "http://localhost:8080".to_string());
+
+        assert!(cell.ensure_client().await.is_none());
+    }
 }

@@ -24,7 +24,7 @@ use crate::{FrontendConfig, MailKeepFrontend, OidcConfig};
 pub(crate) mod oidc;
 pub(crate) mod session_pool;
 
-pub(crate) use oidc::OidcClient;
+pub(crate) use oidc::OidcClientCell;
 pub(crate) use session_pool::{AuthSession, BackendSessionPool};
 
 pub(crate) mod auth_user;
@@ -77,30 +77,17 @@ impl IntoSubsystem<anyhow::Error> for FrontendSubsystem {
 
         let frontend_config = Arc::new(self.config.clone());
 
-        // Build the OIDC client up-front if SSO is fully configured. Missing /
-        // partial config is logged inside `is_sso_available()`; discovery
-        // failures here are logged and treated as "SSO disabled" so a bad IdP
-        // does not block server startup.
-        let oidc_client: Option<Arc<OidcClient>> = match self.oidc_config.as_ref() {
-            Some(cfg) if cfg.is_sso_available() => match OidcClient::new(cfg, &self.config.base_url).await {
-                Ok(client) => Some(Arc::new(client)),
-                Err(e) => {
-                    tracing::error!(error = %e, "OIDC client init failed; SSO disabled");
-                    None
-                }
-            },
-            _ => None,
-        };
-
         let mut app_router = axum::Router::new().serve_dioxus_application(dioxus_server::ServeConfig::new(), MailKeepFrontend);
 
-        // When SSO is configured, merge the OIDC router and expose the client
-        // and config to handlers / server fns. `oidc_client` is `Some` exactly
-        // when `oidc_config.is_set()` was true above, so unwrapping the cloned
-        // config here is safe by construction.
-        if let Some(client) = oidc_client {
-            let cfg = self.oidc_config.clone().expect("oidc_config is Some when oidc_client was built");
-            app_router = app_router.merge(oidc::oidc_router()).layer(Extension(client)).layer(Extension(Arc::new(cfg)));
+        // When SSO is fully configured, merge the OIDC router and expose an
+        // `OidcClientCell` to handlers / server fns. Discovery is NOT
+        // performed here: the cell defers it to the first request that needs
+        // it (login page render or the "sign in with SSO" button) and
+        // retries on subsequent requests if it failed, so a transient IdP
+        // outage doesn't permanently disable SSO for the process's lifetime.
+        if let Some(cfg) = self.oidc_config.clone().filter(OidcConfig::is_sso_available) {
+            let cell = Arc::new(OidcClientCell::new(cfg, self.config.base_url.clone()));
+            app_router = app_router.merge(oidc::oidc_router()).layer(Extension(cell));
         }
 
         let app_router = app_router

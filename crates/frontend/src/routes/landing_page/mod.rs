@@ -1,9 +1,9 @@
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use {
-    crate::OidcConfig,
     crate::routes::server_helpers::to_server_err,
     crate::server::AuthSession,
+    crate::server::OidcClientCell,
     mk_core::{
         CoreServices,
         types::{Capabilities, Capability},
@@ -18,17 +18,21 @@ use crate::{
     components::{LoginForm, RegisterAdminForm},
 };
 
-/// Returns the SSO sign-in button label, or `None` if SSO is not configured.
+/// Returns the SSO sign-in button label, or `None` if SSO is not configured
+/// or is currently unavailable (e.g. the IdP is unreachable). Attempts OIDC
+/// discovery on demand via [`OidcClientCell::ensure_client`] if it hasn't
+/// succeeded yet, so a recovered IdP is picked up on the next login-page
+/// load without restarting the server.
 #[get(
     "/api/v1/sso/config",
-    oidc_config: Option<axum::Extension<Arc<OidcConfig>>>,
+    oidc_cell: Option<axum::Extension<Arc<OidcClientCell>>>,
 )]
 pub(crate) async fn get_sso_config() -> Result<Option<String>, ServerFnError> {
-    let Some(axum::Extension(cfg)) = oidc_config else {
+    let Some(axum::Extension(cell)) = oidc_cell else {
         return Ok(None);
     };
-    if cfg.is_sso_available() {
-        Ok(Some(cfg.button_label().to_owned()))
+    if cell.ensure_client().await.is_some() {
+        Ok(Some(cell.config().button_label().to_owned()))
     } else {
         Ok(None)
     }
