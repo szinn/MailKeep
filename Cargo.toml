@@ -102,7 +102,7 @@ openidconnect = { version = "4.0.1", default-features = false, features = [
 config = "0.15.25"
 
 # Utility
-alderkit-token = "0.1.0"
+alderkit-token = "0.1.1"
 chrono = { version = "0.4.45", features = ["serde"] }
 derive_builder = "0.20.2"
 tempfile = "3.27.0"
