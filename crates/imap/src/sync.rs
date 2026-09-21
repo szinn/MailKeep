@@ -15,6 +15,7 @@
 
 use std::{sync::Arc, time::Duration};
 
+use async_imap::error::Error as ImapError;
 use bytes::Bytes;
 use chrono::Utc;
 use futures::StreamExt;
@@ -131,7 +132,16 @@ pub(crate) async fn poll_task(
                 if cancel.is_cancelled() {
                     break;
                 }
-                sync_folder(&mut session, account_id, &account_label, folder, &ingest, &folders, &messages, &status).await?;
+                match sync_folder(&mut session, account_id, &account_label, folder, &ingest, &folders, &messages, &status).await {
+                    Ok(_) => {}
+                    // The mailbox is gone server-side; skip it and keep syncing
+                    // the account's other folders instead of failing the whole
+                    // pass (and retrying this same dead folder forever).
+                    Err(Error::FolderNotFound(path)) => {
+                        tracing::warn!(account = %account_label, folder = %path, "folder no longer exists on server; skipping");
+                    }
+                    Err(e) => return Err(e),
+                }
             }
             // Best-effort logout; failure here is benign.
             if let Err(e) = session.logout().await {
@@ -320,10 +330,14 @@ pub(crate) async fn sync_folder(
     messages: &Arc<dyn MessageService>,
     status: &Arc<Mutex<SyncStatus>>,
 ) -> Result<(u32, u32), Error> {
-    let mailbox = session
-        .select(&folder.path)
-        .await
-        .map_err(|e| Error::Infrastructure(format!("SELECT {} failed: {e}", folder.path)))?;
+    let mailbox = session.select(&folder.path).await.map_err(|e| match e {
+        // A `NO` response to SELECT means the mailbox is not selectable —
+        // renamed or deleted server-side since we last saw it. Distinct from
+        // other SELECT failures (transport/protocol) so the poller can skip
+        // just this folder rather than treating it as transient.
+        ImapError::No(_) => Error::FolderNotFound(folder.path.clone()),
+        other => Error::Infrastructure(format!("SELECT {} failed: {other}", folder.path)),
+    })?;
     let server_uidvalidity = mailbox
         .uid_validity
         .ok_or_else(|| Error::Infrastructure(format!("server returned no UIDVALIDITY for {}", folder.path)))?;

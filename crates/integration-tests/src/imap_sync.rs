@@ -673,3 +673,52 @@ async fn bad_credentials_surface_failure_signal() {
     core.abort();
     let _ = core.await;
 }
+
+// ─── Scenario 6: missing folder skipped
+// ──────────────────────────────────────
+
+/// A folder configured locally but renamed/deleted on the server (SELECT
+/// returns `NO`) must not stall sync of the account's other folders. Poll a
+/// nonexistent mailbox alongside a real INBOX with seeded mail: the account
+/// must still reach `Idle` and ingest INBOX's message, not get stuck retrying
+/// the whole pass against the dead folder.
+///
+/// Regression guard: `poll_task` used to `?`-propagate any `sync_folder`
+/// error, aborting the pass (and skipping every folder after the failing one)
+/// and driving the account into backoff/`Error` forever.
+#[tokio::test]
+#[ignore = "needs a docker/colima daemon — run via `just imap-integration-tests`"]
+async fn poll_skips_folder_missing_on_server() {
+    let gm = Greenmail::start().await;
+    let mut control = Control::connect(&gm).await.unwrap();
+    control.append("INBOX", "still reachable").await.unwrap();
+    let _ = control.logout().await;
+
+    let ctx = setup_pipeline().await;
+    let user = make_user(&ctx).await;
+    let account_id = make_account(&ctx, user.id, gm.server()).await;
+    // Never created on greenmail: every SELECT returns NO.
+    let missing = make_folder(&ctx, account_id, "Later", None).await;
+    let inbox = make_inbox(&ctx, account_id, false).await;
+    let core = run_core(&ctx);
+
+    let adapter = make_adapter(&ctx, Duration::from_secs(1));
+    // Missing folder listed first: a `?`-propagating pass would never reach
+    // INBOX.
+    adapter.start_account(account_id, params_for(gm.server(), &[&missing, &inbox])).await.unwrap();
+
+    let msgs = wait_for_messages(&ctx.repos, account_id, 1, ACCOUNT_TIMEOUT).await;
+    assert_eq!(msgs.len(), 1, "INBOX must still be synced despite the other folder missing on the server");
+    assert!(location_exists(&ctx.repos, msgs[0].id, inbox.id).await);
+
+    // The account must recover to a healthy Idle pass (not stuck retrying with
+    // backoff / SyncState::Error) since the surviving folder syncs cleanly.
+    wait_for_status(&adapter, account_id, ACCOUNT_TIMEOUT, "reach Idle despite missing folder", |s| {
+        s.state == SyncState::Idle
+    })
+    .await;
+
+    adapter.stop_account(account_id).await.unwrap();
+    core.abort();
+    let _ = core.await;
+}

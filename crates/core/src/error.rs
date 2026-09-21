@@ -50,6 +50,13 @@ pub enum Error {
     #[error("Blob not found for account {account_id}")]
     BlobNotFound { account_id: u64, hash: String },
 
+    /// A configured IMAP folder no longer exists on the server (renamed or
+    /// deleted since it was last synced). Distinct from
+    /// [`Self::Infrastructure`] so sync loops can skip the folder instead
+    /// of treating it as transient.
+    #[error("mailbox not found on server: {0}")]
+    FolderNotFound(String),
+
     #[error("Frontend error: {0}")]
     FrontendError(String),
 
@@ -86,7 +93,7 @@ impl Error {
             | Self::CredentialsDeserialize(_)
             | Self::Unimplemented(_) => ErrorKind::Internal,
             Self::StorageUnavailable(_) => ErrorKind::ServiceUnavailable,
-            Self::BlobNotFound { .. } => ErrorKind::NotFound,
+            Self::BlobNotFound { .. } | Self::FolderNotFound(_) => ErrorKind::NotFound,
             Self::RepositoryError(e) => e.kind(),
             Self::FrontendError(_) => ErrorKind::Internal,
             #[cfg(any(test, feature = "test-support"))]
