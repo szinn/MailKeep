@@ -31,7 +31,7 @@ mockall = "0.15.0"
 
 # Error handling
 anyhow = "1.0.104"
-thiserror = "2.0.20"
+thiserror = "2.0.21"
 
 # Crypto
 argon2 = "0.6.0"
