@@ -99,7 +99,7 @@ openidconnect = { version = "4.0.1", default-features = false, features = [
 ] }
 
 # Config
-config = "0.15.26"
+config = "0.15.27"
 
 # Utility
 alderkit-token = "0.1.2"
