@@ -430,7 +430,8 @@ pub(crate) async fn sync_folder(
         match upper {
             // Known ceiling: stop once the window reaches it.
             Some(upper) if to >= upper => break,
-            // Unknown ceiling: stop on the first empty window (or u32 overflow).
+            // Unknown ceiling: stop on the first empty window (or u32
+            // overflow).
             None if !fetched_any || to == u32::MAX => break,
             _ => {}
         }

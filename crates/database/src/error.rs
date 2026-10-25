@@ -73,13 +73,13 @@ pub fn handle_dberr(error: DbErr) -> RepositoryError {
                 tracing::warn!(error = %error, "Query canceled");
                 RepositoryError::QueryCanceled
             }
-            // SQLite contention: SQLITE_BUSY (5) and SQLITE_LOCKED (6). The lock
-            // clears once the holding transaction commits, so these are transient
-            // and must be retried — not treated as a permanent failure. busy_timeout
-            // covers simple write waits, but read→write snapshot conflicts
-            // (BUSY_SNAPSHOT) still surface here. These bare numeric codes are
-            // SQLite-only; Postgres/MySQL use SQLSTATE strings, so there is no
-            // collision with the codes matched above.
+            // SQLite contention: SQLITE_BUSY (5) and SQLITE_LOCKED (6). The
+            // lock clears once the holding transaction commits, so these are
+            // transient and must be retried — not treated as a permanent
+            // failure. busy_timeout covers simple write waits, but read→write
+            // snapshot conflicts (BUSY_SNAPSHOT) still surface here. These bare
+            // numeric codes are SQLite-only; Postgres/MySQL use SQLSTATE
+            // strings, so there is no collision with the codes matched above.
             sqlite_busy::BUSY | sqlite_busy::LOCKED => {
                 tracing::warn!(error_code = %code, error = %error, "Database busy/locked — transient, will retry");
                 RepositoryError::Busy(error.to_string())

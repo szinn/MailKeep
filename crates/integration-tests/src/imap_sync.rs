@@ -128,8 +128,9 @@ async fn make_inbox(ctx: &TestContext, account_id: AccountId, idle: bool) -> Fol
                 path: "INBOX".into(),
                 display_name: None,
                 special_use: Some(SpecialUse::Inbox),
-                // Start with no known UIDVALIDITY so the first SELECT records the
-                // server's value (the rollover path triggers only on a *change*).
+                // Start with no known UIDVALIDITY so the first SELECT records
+                // the server's value (the rollover path triggers only on a
+                // *change*).
                 uidvalidity: None,
             }],
         )

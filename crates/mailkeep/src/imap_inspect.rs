@@ -102,7 +102,8 @@ fn special_use_tag(special_use: SpecialUse) -> &'static str {
         SpecialUse::Archive => "\\Archive",
         SpecialUse::Junk => "\\Junk",
         SpecialUse::All => "\\All",
-        // `SpecialUse` is #[non_exhaustive]; render any future variant generically.
+        // `SpecialUse` is #[non_exhaustive]; render any future variant
+        // generically.
         _ => "\\?",
     }
 }

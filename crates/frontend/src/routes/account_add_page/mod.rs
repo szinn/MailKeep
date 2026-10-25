@@ -256,8 +256,9 @@ pub(crate) fn AccountAddPage() -> Element {
                 Ok(()) => {
                     connected_email.set(Some(email().trim().to_string()));
                     match probe_list_folders(server_dto(), email().trim().to_string(), password()).await {
-                        // Failure state 2 handled in the inner Err arm: connection
-                        // stayed good (banner kept), only folders failed.
+                        // Failure state 2 handled in the inner Err arm:
+                        // connection stayed good (banner kept), only folders
+                        // failed.
                         Ok(folders) => {
                             let mut t = FolderTree::build(folders);
                             t.default_select_inbox();
@@ -271,7 +272,8 @@ pub(crate) fn AccountAddPage() -> Element {
                         }
                     }
                 }
-                // Failure state 1: connection failed — inline conn error, picker hidden.
+                // Failure state 1: connection failed — inline conn error,
+                // picker hidden.
                 Err(_e) => {
                     picker_shown.set(false);
                     conn_error.set(Some(login_friendly()));

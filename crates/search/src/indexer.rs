@@ -150,8 +150,8 @@ impl SearchSubsystem {
                         ids.push(msg.id);
                     }
                 }
-                // Poison pill: a permanently-absent blob can never succeed; skip
-                // the document but mark the row so it never re-drains.
+                // Poison pill: a permanently-absent blob can never succeed;
+                // skip the document but mark the row so it never re-drains.
                 Err(e @ Error::BlobNotFound { .. }) => {
                     tracing::warn!(
                         message_id = msg.id,
@@ -162,9 +162,10 @@ impl SearchSubsystem {
                     ids.push(msg.id);
                 }
                 // Any other error is assumed transient: fail the batch so it
-                // retries next tick rather than dropping the message. Nothing has
-                // been written or marked yet, so aborting here leaves no partial
-                // state; the delete-before-add write makes the retry idempotent.
+                // retries next tick rather than dropping the message. Nothing
+                // has been written or marked yet, so aborting here leaves no
+                // partial state; the delete-before-add write makes the retry
+                // idempotent.
                 Err(e) => return Err(e),
             }
         }

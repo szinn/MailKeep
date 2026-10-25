@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use mail_parser::{MessageParser, MimeHeaders};
+use mail_parser::MessageParser;
 use mk_core::{
     Error,
     message::NamedAddress,
@@ -94,9 +94,9 @@ pub fn parse_eml(content_hash: ContentHash, raw: &[u8]) -> Result<ParsedEml, Err
     let attachments = msg
         .attachments()
         .map(|part| ExtractedAttachment {
-            bytes: part.contents().to_vec(),
+            bytes: part.decoded().into_owned(),
             filename: part.attachment_name().map(str::to_string),
-            content_type: content_type_string(part),
+            content_type: content_type_string(&part),
             content_id: part.content_id().map(str::to_string),
             is_inline: part.content_id().is_some(),
         })
@@ -111,8 +111,8 @@ pub fn parse_eml(content_hash: ContentHash, raw: &[u8]) -> Result<ParsedEml, Err
         cc_addresses: address_list(msg.cc()),
         bcc_addresses: address_list(msg.bcc()),
         reply_to_addresses: address_list(msg.reply_to()),
-        sent_date: msg.date().and_then(mail_dt_to_chrono),
-        in_reply_to: msg.in_reply_to().as_text().map(str::to_string),
+        sent_date: msg.date().as_ref().and_then(mail_dt_to_chrono),
+        in_reply_to: msg.in_reply_to().and_then(|ids| ids.first().map(str::to_string)),
         references: header_text_list(msg.references()),
         snippet,
         size_bytes: raw.len() as i64,
@@ -121,7 +121,7 @@ pub fn parse_eml(content_hash: ContentHash, raw: &[u8]) -> Result<ParsedEml, Err
 }
 
 /// First address of an address header as `(EmailAddress, name)`.
-fn first_address(addr: Option<&mail_parser::Address<'_>>) -> Option<(EmailAddress, Option<String>)> {
+fn first_address(addr: Option<mail_parser::AddressList<'_>>) -> Option<(EmailAddress, Option<String>)> {
     let a = addr?.first()?;
     let email = a.address()?;
     Some((EmailAddress::new(email).ok()?, a.name().map(str::to_string)))
@@ -129,11 +129,11 @@ fn first_address(addr: Option<&mail_parser::Address<'_>>) -> Option<(EmailAddres
 
 /// All addresses of an address header as `NamedAddress`, skipping unparseable
 /// ones.
-fn address_list(addr: Option<&mail_parser::Address<'_>>) -> Vec<NamedAddress> {
+fn address_list(addr: Option<mail_parser::AddressList<'_>>) -> Vec<NamedAddress> {
     let Some(list) = addr else {
         return Vec::new();
     };
-    list.iter()
+    list.mailboxes()
         .filter_map(|a| {
             let email = a.address()?;
             Some(NamedAddress {
@@ -154,12 +154,8 @@ pub(crate) fn content_type_string(part: &mail_parser::MessagePart<'_>) -> String
     )
 }
 
-fn header_text_list(value: &mail_parser::HeaderValue<'_>) -> Vec<String> {
-    match value {
-        mail_parser::HeaderValue::Text(t) => vec![t.to_string()],
-        mail_parser::HeaderValue::TextList(list) => list.iter().map(ToString::to_string).collect(),
-        _ => Vec::new(),
-    }
+fn header_text_list(value: Option<mail_parser::TextList<'_>>) -> Vec<String> {
+    value.map(|list| list.iter().map(str::to_string).collect()).unwrap_or_default()
 }
 
 /// Convert a `mail_parser::DateTime` to a chrono `DateTime<Utc>`.

@@ -136,8 +136,9 @@ fn normalize_attribute(attr: &NameAttribute<'_>) -> String {
         NameAttribute::Junk => "junk".to_string(),
         NameAttribute::Sent => "sent".to_string(),
         NameAttribute::Trash => "trash".to_string(),
-        // Extension flags carry the raw token, sometimes still backslash-prefixed
-        // (e.g. `\HasChildren`); strip the leading backslash and lowercase.
+        // Extension flags carry the raw token, sometimes still
+        // backslash-prefixed (e.g. `\HasChildren`); strip the leading backslash
+        // and lowercase.
         NameAttribute::Extension(name) => name.trim_start_matches('\\').to_ascii_lowercase(),
         // `NameAttribute` is `#[non_exhaustive]`; treat any future flag as an
         // uncategorized structural attribute (its Debug rendering, normalized).

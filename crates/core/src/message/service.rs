@@ -117,9 +117,10 @@ impl MessageService for MessageServiceImpl {
 
                         (message.id, true)
                     }
-                    // Concurrent insert race on the (account_id, content_hash) unique
-                    // index: another worker archived this exact content (and its
-                    // attachments) first. Dedup to the winner rather than failing.
+                    // Concurrent insert race on the (account_id, content_hash)
+                    // unique index: another worker archived this exact content
+                    // (and its attachments) first. Dedup to the winner rather
+                    // than failing.
                     Err(Error::RepositoryError(RepositoryError::Constraint(_))) => {
                         let winner = message_repository
                             .find_by_account_and_content_hash(tx, account_id, parsed.content_hash)

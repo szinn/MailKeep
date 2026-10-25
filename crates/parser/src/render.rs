@@ -8,7 +8,7 @@ use std::{
 };
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use mail_parser::{MessageParser, MimeHeaders, PartType};
+use mail_parser::{MessageParser, PartKind};
 use mk_core::Error;
 
 use crate::parse::content_type_string;
@@ -44,7 +44,7 @@ pub fn render_message_for_display(raw: &[u8], load_remote: bool) -> Result<Rende
     // (see `body_html`/`body_text` docs), so we must check the underlying
     // part type rather than trust `body_html(0)` returning `Some` — otherwise
     // a plain-text-only message would be misreported as having HTML.
-    let has_real_html = matches!(msg.html_part(0).map(|p| &p.body), Some(PartType::Html(_)));
+    let has_real_html = matches!(msg.html_body().next().map(|p| p.kind()), Some(PartKind::Html));
     if !has_real_html {
         let text = msg.body_text(0).map(Cow::into_owned);
         return Ok(RenderedBody {
@@ -90,8 +90,8 @@ fn build_cid_map(msg: &mail_parser::Message<'_>) -> HashMap<String, String> {
     let mut map = HashMap::new();
     for part in msg.attachments() {
         let Some(cid) = part.content_id() else { continue };
-        let mime = content_type_string(part);
-        let encoded = BASE64.encode(part.contents());
+        let mime = content_type_string(&part);
+        let encoded = BASE64.encode(part.decoded());
         map.insert(normalize_cid(cid), format!("data:{mime};base64,{encoded}"));
     }
     map

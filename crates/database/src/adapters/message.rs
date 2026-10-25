@@ -383,8 +383,9 @@ mod tests {
             token: MessageToken::generate(),
             account_id,
             rfc822_message_id: rfc822_id.to_string(),
-            // Derive the hash from the (unique) id so distinct rows get distinct
-            // content hashes — identity is now (account_id, content_hash).
+            // Derive the hash from the (unique) id so distinct rows get
+            // distinct content hashes — identity is now (account_id,
+            // content_hash).
             content_hash: ContentHash::compute(rfc822_id.as_bytes()),
             subject: Some("Hello".into()),
             from_address: EmailAddress::new("alice@example.com").unwrap(),
