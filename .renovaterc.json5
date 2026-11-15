@@ -74,6 +74,15 @@
         commitMessageTopic: "{{{groupName}}} group"
       },
       matchPackageNames: ["/dioxus/"]
+    },
+    {
+      description: "Axum Session Group",
+      matchDatasources: ["crate"],
+      groupName: "axum_session",
+      group: {
+        commitMessageTopic: "{{{groupName}}} group"
+      },
+      matchPackageNames: ["axum_session", "axum_session_auth"]
     }
   ]
 }
