@@ -1,6 +1,6 @@
 [tools]
 "buf" = "1.75.0"
-"cargo:cargo-audit" = "0.22.2"
+"cargo:cargo-audit" = "0.23.0"
 "cargo:cargo-deny" = "0.20.2"
 "cargo:cargo-insta" = "1.49.0"
 "cargo:cargo-nextest" = "0.9.151"
@@ -10,7 +10,7 @@
 "colima" = "0.10.3"
 "git-cliff" = "2.14.2"
 "npm:tailwindcss" = "4.3.5"
-"prettier" = "3.9.10"
+"prettier" = "3.10.1"
 "protobuf" = "36.2"
 "tailwindcss" = "4.2.1"
 
