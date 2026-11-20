@@ -11,7 +11,7 @@ Use only `jj` commands for all version control operations.
 - Run: `just run`
 - Format: `just fmt`
 - Lint: `just clippy`
-- Quick tests (component + postgres): `just quick-test`
+- Quick tests (component + SQLite integration): `just quick-test`
 - All tests: `just test`
 - Component tests: `just component-tests`
 - Integration tests: `just integration-tests`
@@ -28,8 +28,12 @@ toward the core domain. Never introduce dependencies from `core` to outer crates
 ```
 crates/
 ├── core/               # Domain layer: business logic, domain models, and port traits (interfaces)
-├── database/           # Adapter: implements persistence ports defined in core (SeaORM/Postgres)
+├── database/           # Adapter: implements persistence ports defined in core (SeaORM)
 ├── frontend/           # Adapter: user interface, calls into core ports
+├── imap/               # Adapter: IMAP sync
+├── parser/             # Adapter: message parsing
+├── search/             # Adapter: search index
+├── storage/            # Adapter: encrypted blob storage
 ├── mailkeep/           # Application entry point, wires adapters to ports
 └── integration-tests/  # Integration tests
 ```
@@ -43,12 +47,13 @@ repository trait (port), and service together:
 crates/core/src/
 ├── lib.rs              # CoreServices composition root, create_services()
 ├── error.rs            # Error, ErrorKind, RepositoryError
-├── types.rs            # Shared newtypes (Email, Age) used across domains
+├── types/              # Shared newtypes (Email, ContentHash, Capability) used across domains
 ├── repository.rs       # Shared infrastructure: Repository, Transaction traits,
 │                       #   RepositoryService, and transaction macros
 ├── test_support.rs     # Mock implementations (behind "test-support" feature)
 ├── auth/               # Session auth: Session, AuthService, SessionRepository
-└── user/               # Users and settings: User, UserService, UserSettingService
+├── user/               # Users and settings: User, UserService, UserSettingService
+└── account/, folder/, message/, jobs/, …   # one directory per domain, same layout
 ```
 
 **Adding a new domain:** Create a new directory (e.g. `order/`) with `mod.rs`, `model.rs`,
@@ -58,16 +63,16 @@ crates/core/src/
 **Import conventions:** Use flat re-exports from domain modules, not submodule paths:
 
 - `use crate::user::{User, UserService, UserId}` (not `user::model::User`)
-- `use crate::session::{Session, NewSession}` (not `session::model::Session`)
+- `use crate::auth::{Session, NewSession}` (not `auth::model::Session`)
 - `use crate::repository::{Repository, Transaction}` for shared infrastructure
-- `use crate::types::{Email, Age}` for shared newtypes
+- `use crate::types::{Email, ContentHash}` for shared newtypes
 
 ### Subsystem Pattern (tokio-graceful-shutdown)
 
 Each crate that owns background work exposes a `XxxSubsystem` struct + `create_xxx_subsystem()` factory
-in its `lib.rs` — same pattern as `ApiSubsystem` in `bb-api`. The subsystem's `run()` starts its
+in its `lib.rs` — e.g. `create_imap_subsystem` in `crates/imap/src/subsystem.rs`. The subsystem's `run()` starts its
 child subsystems via `subsys.start(SubsystemBuilder::new(...))` then awaits `on_shutdown_requested()`.
-`mailkeep/main.rs` stays clean: call the factories, pass results to `Toplevel`).
+`crates/mailkeep/src/bin/mailkeep.rs` stays clean: call the factories, pass results to `Toplevel`.
 
 ## Database
 
@@ -85,7 +90,8 @@ step, run the end-of-task routine below.
 
 **After completing each task (end-of-task routine):**
 
-These **MUST** be run as separate Bash commands. Do **NOT** join them into a single one with `&&`.
+Run these as three separate Bash commands, not chained with `&&` — chained commands miss the
+permission allowlist and trigger prompts.
 
 1. `just fmt-lint` — format code
 2. `just component-tests` — verify tests pass
@@ -110,8 +116,9 @@ To verify the baseline state, run `just component-tests`.
 
 ## Conventions
 
-- **Commits:** Valid scopes: `api`, `cli`, `core`, `database`, `frontend` (match crate names)
-- **Error handling:** `thiserror` for `core`, `api`, `database`; `anyhow` for `mailkeep` (binary)
+- **Commits:** Valid scopes: crate names (`core`, `database`, `frontend`, `imap`, `parser`, `search`,
+  `storage`), `cli` for the `mailkeep` binary, `deps` and `release`
+- **Error handling:** `thiserror` for library crates; `anyhow` for `mailkeep` (binary)
 
 ## Insights
 
@@ -125,9 +132,9 @@ skill to orchestrate both and save a research document.
 
 Directory layout:
 
-- `.insights/issues/` — triage documents (BB-XX-triage-\*.md)
-- `.insights/shared/specs/` — specs (BB-XX-spec-\*.md)
-- `.insights/shared/plans/` — plans (BB-XX-plan-\*.md)
+- `.insights/issues/` — triage documents (MK-XX-triage-\*.md)
+- `.insights/shared/specs/` — specs (MK-XX-spec-\*.md)
+- `.insights/shared/plans/` — plans (MK-XX-plan-\*.md)
 - `.insights/shared/research/` — research documents
 - `.insights/scotte/` — personal notes
 - `.insights/searchable/` — hardlink mirror for grep/search (read-only; strip "searchable/"

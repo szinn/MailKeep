@@ -15,7 +15,7 @@ an existing instance is required for database-related commands.
 ## SQLite Notes
 
 When using the SQLite backend, MailKeep automatically configures these PRAGMAs
-on every pool connection (see `bb_database::open_database`):
+on every pool connection (see `mk_database::open_database`):
 
 - `journal_mode=WAL` — readers and writers don't block each other
 - `busy_timeout=5000` — wait up to 5s for a held lock before failing
@@ -44,13 +44,13 @@ Register every new migration in `crates/database/src/migrations/mod.rs` in two p
 be empty.
 
 **Enum storage:** All domain enums stored as plain `String` columns (no DB CHECK constraints).
-Conversion functions are module-private (`book_status_to_str` / `str_to_book_status`).
+Conversion functions are crate-private (e.g. `job_status_to_str` / `str_to_job_status` in `entities/jobs.rs`).
 `From<Model> for DomainType` is infallible and panics on unknown values — acceptable since all
 writes go through adapters.
 
-**`ActiveModelBehavior` / `before_save`:** The `books` entity has a `before_save` hook that
-auto-increments `version` and sets `updated_at`. When inserting, use `version: Set(0)` — the
-hook bumps it to 1. Don't fight it.
+**`ActiveModelBehavior` / `before_save`:** Versioned entities (e.g. `messages`, `accounts`) have a
+`before_save` hook that auto-increments `version` and sets `updated_at`. When inserting, use
+`version: Set(0)` — the hook bumps it to 1. Bulk `update_many` bypasses the hook.
 
 **Optimistic locking pattern:**
 
@@ -60,25 +60,11 @@ if existing.version != record.version { return Err(VersionConflict); }
 // set all mutable fields, then .update()
 ```
 
-**Junction table filter (subquery pattern):**
+**Subquery filter:** build a `Query::select()` and filter with `Column::in_subquery(..)` — see
+the owned-accounts filter in `adapters/message.rs` (`messages::Column::AccountId.in_subquery`).
 
-```rust
-use sea_orm::sea_query::Query;
-if let Some(author_id) = filter.author_id {
-    let mut subq = Query::select();
-    subq.column(book_authors::Column::BookId)
-        .from(book_authors::Entity)
-        .and_where(book_authors::Column::AuthorId.eq(author_id as i64));
-    query = query.filter(books::Column::Id.in_subquery(subq));
-}
-```
-
-**Junction table inserts in tests:**
-
-```rust
-let db_tx = TransactionImpl::get_db_transaction(&*tx).unwrap();
-book_authors::ActiveModel { book_id: Set(book.id as i64), ... }.insert(db_tx).await.unwrap();
-```
+**Raw inserts in tests:** get the transaction with
+`TransactionImpl::get_db_transaction(&*tx).unwrap()` and insert `ActiveModel`s directly.
 
 **Adding a new repository to `RepositoryService`:**
 
@@ -86,6 +72,5 @@ book_authors::ActiveModel { book_id: Set(book.id as i64), ... }.insert(db_tx).aw
 2. Create `database/src/adapters/<name>.rs` with adapter impl + tests
 3. Register in `database/src/adapters/mod.rs`
 4. Import + wire into builder in `database/src/lib.rs`
-5. Add `Mock<Name>Repository` to **4** test helpers:
-   `core/src/auth/service.rs`, `core/src/book/service.rs`,
-   `core/src/user/service/user.rs`, `core/src/user/service/user_settings.rs`
+5. Add the new `Mock<Name>Repository` to every core service test helper that builds a
+   `RepositoryService` (find them with a search for `RepositoryService` under `crates/core/src`)
