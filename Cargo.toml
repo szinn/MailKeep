@@ -41,7 +41,7 @@ rand = "0.10.4"
 secrecy = "0.10.3"
 sha2 = "0.11.1"
 
-bytes = "1.12.1"
+bytes = "1.12.2"
 mail-parser = "1.0.1"
 
 # HTML email rendering
