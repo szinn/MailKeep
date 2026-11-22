@@ -62,7 +62,7 @@ RUN /usr/local/cargo/bin/dx bundle --server --package mailkeep --release --targe
 # Sanity check: should say "not a dynamic executable"
 RUN ldd target/dx/mailkeep/release/web/mailkeep || true
 
-FROM ubuntu:latest@sha256:065aa8626841f16057b78b027b464cd59c4fac36c204c72dcbf48d66f5fa8a96 AS certs
+FROM ubuntu:latest@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db AS certs
 RUN groupadd --gid 1234 mailkeep && useradd -g 1234 -M -u 1234 -s /usr/sbin/nologin mailkeep
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 RUN update-ca-certificates
