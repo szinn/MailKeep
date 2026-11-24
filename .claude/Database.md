@@ -1,16 +1,16 @@
 # Database
 
-The project uses SeaORM with Postgres, MySQL, and SQLite support. For Postgres and MySQL,
-an existing instance is required for database-related commands.
+The project uses SeaORM. The build enables only the SQLite driver, and the app opens
+`<metadata_path>/mailkeep.db` (`MAILKEEP__METADATA_PATH`). Write adapters to stay portable to
+Postgres and MySQL.
 
 ## Environment Variables
 
-- `PGUSER`, `PGPASSWORD`, `PGDATABASE` — used by `just create-database` and `just database`
-- `PGADMINUSER`, `PGADMINPASSWORD` — admin credentials for database creation
-- `MAILKEEP__DATABASE__DATABASE_URL` — SeaORM connection string for migrations and entity generation
-  - Postgres: `postgres://user:password@host:port/database`
-  - MySQL: `mysql://user:password@host:port/database`
-  - SQLite: `sqlite::path`
+The Postgres recipes need a running instance; `just create-database` drops and recreates the
+database and role.
+
+- `PGUSER`, `PGPASSWORD`, `PGDATABASE` — role and database made by `just create-database`
+- `PGADMINUSER`, `PGADMINPASSWORD` — admin login for `just create-database` and `just database`
 
 ## SQLite Notes
 

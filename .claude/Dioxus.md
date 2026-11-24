@@ -29,7 +29,7 @@ Hydration: the client's first render must match the server's — load data with
 - Without `?`, returns `Result<Resource<Result<T, E>>, RenderError>` — extract value with `match result { Ok(r) => r().and_then(...), Err(_) => None }`
 - `?` suspends the entire component subtree up to the nearest `SuspenseBoundary`; use `SuspenseBoundary { fallback: |_| rsx! {}, ChildComponent {} }` to contain suspension to a subtree (e.g. keep NavBar visible while page content loads)
 - **HTTP method rule**: `#[get]` only for zero-parameter fns (browser rejects GET with body).
-  Parameterized fns use `#[post]` for reads or `#[put]` for writes.
+  Parameterized fns use `#[put]` to create a resource and `#[post]` for everything else.
   Called with: `use_server_future(move || get_folder(token.clone()))?` (illustrative)
 - `navigator.push(Route::Foo {})` returns `Option<_>` — must add `;` in onclick closures or compiler error
 - `mk-core` is an optional dep in `mk-frontend`, gated by the `server` feature

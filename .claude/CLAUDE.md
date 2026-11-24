@@ -76,7 +76,7 @@ child subsystems via `subsys.start(SubsystemBuilder::new(...))` then awaits `on_
 
 ## Database
 
-Persistence uses SeaORM with Postgres, MySQL, and SQLite support. See @.claude/Database.md for migration naming conventions, adapter patterns, and SQLite-specific notes.
+Persistence uses SeaORM on SQLite, with adapters kept portable to Postgres and MySQL. See @.claude/Database.md for migration naming conventions, adapter patterns, and SQLite-specific notes.
 
 ## Frontend
 
@@ -125,10 +125,9 @@ To verify the baseline state, run `just component-tests`.
 This project uses `.insights/` for research, triage docs, specs, plans, and personal notes
 managed by the `insights` CLI.
 
-**At the start of brainstorming, spec writing, or planning work**, dispatch the
-`insights-locator` agent to check for prior context before proceeding. Use
-`insights-analyzer` to read the most relevant documents. Use the `insights-research`
-skill to orchestrate both and save a research document.
+**At the start of brainstorming, spec writing, or planning work**, use the
+`insights-research` skill to check for prior context before proceeding. It runs the
+`insights-locator` and `insights-analyzer` agents and returns the findings inline.
 
 Directory layout:
 
