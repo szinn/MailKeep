@@ -5,9 +5,17 @@ use mk_core::{
     stats::{ArchiveStats, StatsRepository},
     user::UserId,
 };
-use sea_orm::{ConnectionTrait, DbBackend, FromQueryResult, Statement, Value, prelude::DateTimeWithTimeZone};
+use sea_orm::{
+    ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, FromQueryResult, PaginatorTrait, QueryFilter, QuerySelect, QueryTrait,
+    prelude::DateTimeWithTimeZone,
+    sea_query::{Alias, Expr, ExprTrait, Query},
+};
 
-use crate::{error::handle_dberr, transaction::TransactionImpl};
+use crate::{
+    entities::{accounts, folders, message_attachments, messages, prelude},
+    error::handle_dberr,
+    transaction::TransactionImpl,
+};
 
 pub(crate) struct StatsRepositoryAdapter;
 
@@ -20,18 +28,8 @@ impl StatsRepositoryAdapter {
 #[derive(FromQueryResult)]
 struct MsgAgg {
     message_count: i64,
-    storage_bytes: i64,
-    attachment_count: i64,
-}
-
-#[derive(FromQueryResult)]
-struct SumAgg {
-    storage_bytes: i64,
-}
-
-#[derive(FromQueryResult)]
-struct CountAgg {
-    account_count: i64,
+    storage_bytes: Option<i64>,
+    attachment_count: Option<i64>,
 }
 
 #[derive(FromQueryResult)]
@@ -43,55 +41,74 @@ struct LastSyncAgg {
 impl StatsRepository for StatsRepositoryAdapter {
     async fn archive_stats(&self, transaction: &dyn Transaction, user_id: UserId) -> Result<ArchiveStats, Error> {
         let db = TransactionImpl::get_db_transaction(transaction)?;
-        let backend = db.get_database_backend();
-        // Per-backend placeholder token and integer CAST type.
-        let (ph, int_ty) = match backend {
-            DbBackend::Postgres => ("$1", "BIGINT"),
-            DbBackend::MySql => ("?", "SIGNED"),
-            // Sqlite and any future backend: `?` placeholder, INTEGER cast.
-            _ => ("?", "INTEGER"),
+        // SUM widens to NUMERIC/DECIMAL on Postgres/MySQL, so cast it back to a
+        // 64-bit integer. Only the type name differs per backend.
+        let int_ty = match db.get_database_backend() {
+            DbBackend::Postgres => "BIGINT",
+            DbBackend::MySql => "SIGNED",
+            _ => "INTEGER",
         };
-        let uid = Value::BigInt(Some(user_id as i64));
+        let owned_accounts = || {
+            prelude::Accounts::find()
+                .select_only()
+                .column(accounts::Column::Id)
+                .filter(accounts::Column::UserId.eq(user_id as i64))
+                .into_query()
+        };
 
         // Messages: count + raw-blob byte sum + attachment-count sum, scoped to
         // the user's accounts. One message row per (account, content) already,
         // so no DISTINCT needed here.
-        let msg_sql = format!(
-            "SELECT COUNT(*) AS message_count, CAST(COALESCE(SUM(size_bytes), 0) AS {int_ty}) AS storage_bytes, CAST(COALESCE(SUM(attachment_count), 0) AS \
-             {int_ty}) AS attachment_count FROM messages WHERE account_id IN (SELECT id FROM accounts WHERE user_id = {ph})"
-        );
-        let msg = MsgAgg::find_by_statement(Statement::from_sql_and_values(backend, msg_sql, [uid.clone()]))
+        let msg = prelude::Messages::find()
+            .select_only()
+            .column_as(messages::Column::Id.count(), "message_count")
+            .column_as(messages::Column::SizeBytes.sum().cast_as(Alias::new(int_ty)), "storage_bytes")
+            .column_as(messages::Column::AttachmentCount.sum().cast_as(Alias::new(int_ty)), "attachment_count")
+            .filter(messages::Column::AccountId.in_subquery(owned_accounts()))
+            .into_model::<MsgAgg>()
             .one(db)
             .await
             .map_err(handle_dberr)?
             .unwrap_or(MsgAgg {
                 message_count: 0,
-                storage_bytes: 0,
-                attachment_count: 0,
+                storage_bytes: None,
+                attachment_count: None,
             });
 
         // Attachment blobs: physical on-disk size dedups by content within an
         // account (the same attachment shared across messages is stored once),
         // so sum over DISTINCT (account_id, content_hash, size_bytes).
-        let att_sql = format!(
-            "SELECT CAST(COALESCE(SUM(size_bytes), 0) AS {int_ty}) AS storage_bytes FROM (SELECT DISTINCT account_id, content_hash, size_bytes FROM \
-             message_attachments WHERE account_id IN (SELECT id FROM accounts WHERE user_id = {ph})) AS distinct_attachments"
-        );
-        let att = SumAgg::find_by_statement(Statement::from_sql_and_values(backend, att_sql, [uid.clone()]))
-            .one(db)
-            .await
-            .map_err(handle_dberr)?
-            .unwrap_or(SumAgg { storage_bytes: 0 });
+        let distinct_attachments = prelude::MessageAttachments::find()
+            .select_only()
+            .column(message_attachments::Column::AccountId)
+            .column(message_attachments::Column::ContentHash)
+            .column(message_attachments::Column::SizeBytes)
+            .filter(message_attachments::Column::AccountId.in_subquery(owned_accounts()))
+            .distinct()
+            .into_query();
+        let att_query = Query::select()
+            .expr_as(
+                Expr::col(message_attachments::Column::SizeBytes).sum().cast_as(Alias::new(int_ty)),
+                Alias::new("storage_bytes"),
+            )
+            .from_subquery(distinct_attachments, Alias::new("distinct_attachments"))
+            .to_owned();
+        let att_bytes: Option<i64> = match db.query_one(&att_query).await.map_err(handle_dberr)? {
+            Some(row) => row.try_get("", "storage_bytes").map_err(handle_dberr)?,
+            None => None,
+        };
 
-        let acc_sql = format!("SELECT COUNT(*) AS account_count FROM accounts WHERE user_id = {ph}");
-        let acc = CountAgg::find_by_statement(Statement::from_sql_and_values(backend, acc_sql, [uid.clone()]))
-            .one(db)
+        let account_count = prelude::Accounts::find()
+            .filter(accounts::Column::UserId.eq(user_id as i64))
+            .count(db)
             .await
-            .map_err(handle_dberr)?
-            .unwrap_or(CountAgg { account_count: 0 });
+            .map_err(handle_dberr)?;
 
-        let ls_sql = format!("SELECT MAX(last_synced_at) AS last_synced_at FROM folders WHERE account_id IN (SELECT id FROM accounts WHERE user_id = {ph})");
-        let last = LastSyncAgg::find_by_statement(Statement::from_sql_and_values(backend, ls_sql, [uid.clone()]))
+        let last = prelude::Folders::find()
+            .select_only()
+            .column_as(folders::Column::LastSyncedAt.max(), "last_synced_at")
+            .filter(folders::Column::AccountId.in_subquery(owned_accounts()))
+            .into_model::<LastSyncAgg>()
             .one(db)
             .await
             .map_err(handle_dberr)?
@@ -99,9 +116,9 @@ impl StatsRepository for StatsRepositoryAdapter {
 
         Ok(ArchiveStats {
             message_count: msg.message_count as u64,
-            attachment_count: msg.attachment_count as u64,
-            storage_bytes: (msg.storage_bytes + att.storage_bytes) as u64,
-            account_count: acc.account_count as u64,
+            attachment_count: msg.attachment_count.unwrap_or(0) as u64,
+            storage_bytes: (msg.storage_bytes.unwrap_or(0) + att_bytes.unwrap_or(0)) as u64,
+            account_count,
             last_synced_at: last.last_synced_at.map(|d| d.with_timezone(&Utc)),
         })
     }
